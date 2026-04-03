@@ -76,7 +76,18 @@ Sprint 2 adds authentication and admin provisioning:
 
 The backend now uses JWT auth plus bcrypt password hashing.
 
-Self-registration is disabled. Accounts are provisioned by administrators and login details are distributed externally (for example via email workflows).
+Self-registration is disabled. Accounts are provisioned by administrators.
+
+When an admin creates a user (teacher, learner, or parent), IntelliClass sends that user's credentials (email + temporary password) to their email address via SMTP.
+
+Configure these in `server/.env` for email delivery:
+
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_SECURE`
+- `SMTP_USER`
+- `SMTP_PASS`
+- `SMTP_FROM`
 
 Set `BOOTSTRAP_ADMIN_KEY` in `server/.env`, then call `POST /api/auth/bootstrap-admin` once to create the first administrator account.
 

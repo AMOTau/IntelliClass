@@ -2,6 +2,7 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { pool } from '../config/db.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
+import { sendCredentialsEmail } from '../utils/email.js';
 
 export const usersRouter = Router();
 
@@ -36,6 +37,8 @@ async function ensureUserWithRole(userId, expectedRole, fieldName) {
 }
 
 usersRouter.post('/', requireAuth, requireRole('admin'), async (req, res, next) => {
+  const client = await pool.connect();
+
   try {
     const { firstName, lastName, email, role, password } = req.body;
 
@@ -56,23 +59,44 @@ usersRouter.post('/', requireAuth, requireRole('admin'), async (req, res, next) 
     }
 
     const normalizedEmail = email.trim().toLowerCase();
-    const existingUser = await pool.query('SELECT id FROM users WHERE email = $1', [normalizedEmail]);
+    await client.query('BEGIN');
+
+    const existingUser = await client.query('SELECT id FROM users WHERE email = $1', [normalizedEmail]);
 
     if (existingUser.rowCount > 0) {
+      await client.query('ROLLBACK');
       return res.status(409).json({ message: 'An account with this email already exists.' });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const created = await pool.query(
+    const created = await client.query(
       `INSERT INTO users (first_name, last_name, email, password_hash, role)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING id, role, first_name, last_name, email, created_at, updated_at`,
       [firstName.trim(), lastName.trim(), normalizedEmail, passwordHash, role]
     );
 
+    await sendCredentialsEmail({
+      to: normalizedEmail,
+      fullName: `${firstName.trim()} ${lastName.trim()}`,
+      role,
+      email: normalizedEmail,
+      password,
+    });
+
+    await client.query('COMMIT');
+
     return res.status(201).json({ user: buildPublicUser(created.rows[0]) });
   } catch (error) {
+    try {
+      await client.query('ROLLBACK');
+    } catch {
+      // no-op
+    }
+
     return next(error);
+  } finally {
+    client.release();
   }
 });
 
@@ -298,6 +322,30 @@ usersRouter.post('/provision-learner-family', requireAuth, requireRole('admin'),
       [parentRow.id, learnerRow.id]
     );
 
+    const emailJobs = [
+      sendCredentialsEmail({
+        to: normalizedLearnerEmail,
+        fullName: `${learnerFirstName.trim()} ${learnerLastName.trim()}`,
+        role: 'learner',
+        email: normalizedLearnerEmail,
+        password: learnerPassword,
+      }),
+    ];
+
+    if (parentCreated) {
+      emailJobs.push(
+        sendCredentialsEmail({
+          to: normalizedParentEmail,
+          fullName: `${parentFirstName.trim()} ${parentLastName.trim()}`,
+          role: 'parent',
+          email: normalizedParentEmail,
+          password: parentPassword,
+        })
+      );
+    }
+
+    await Promise.all(emailJobs);
+
     await client.query('COMMIT');
 
     return res.status(201).json({
@@ -388,6 +436,14 @@ usersRouter.post('/provision-teacher-assignment', requireAuth, requireRole('admi
         [classId, subjectId, teacherRow.id]
       );
     }
+
+    await sendCredentialsEmail({
+      to: normalizedTeacherEmail,
+      fullName: `${teacherFirstName.trim()} ${teacherLastName.trim()}`,
+      role: 'teacher',
+      email: normalizedTeacherEmail,
+      password: teacherPassword,
+    });
 
     await client.query('COMMIT');
 
