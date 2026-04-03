@@ -1,0 +1,14 @@
+node_modules
+/dist
+/client/node_modules
+/client/dist
+/server/node_modules
+/server/dist
+.env
+/client/.env
+/server/.env
+.env.*
+!.env.example
+coverage
+.DS_Store
+.vscode
