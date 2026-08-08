@@ -5,6 +5,9 @@ import { AuthSessionProvider, useAuthSession } from './context/AuthSessionContex
 import AdminDashboardPage from './pages/AdminDashboardPage';
 import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
+import TeacherDashboardPage from './pages/TeacherDashboardPage';
+import LearnerDashboardPage from './pages/LearnerDashboardPage';
+import ParentDashboardPage from './pages/ParentDashboardPage';
 import ProfilePage from './pages/ProfilePage';
 
 function RedirectFromUnknownRoute() {
@@ -14,7 +17,18 @@ function RedirectFromUnknownRoute() {
     return <Navigate to="/login" replace />;
   }
 
-  return <Navigate to={user.role === 'admin' ? '/admin' : '/profile'} replace />;
+  switch (user.role) {
+    case 'admin':
+      return <Navigate to="/admin" replace />;
+    case 'teacher':
+      return <Navigate to="/teacher-dashboard" replace />;
+    case 'learner':
+      return <Navigate to="/learner-dashboard" replace />;
+    case 'parent':
+      return <Navigate to="/parent-dashboard" replace />;
+    default:
+      return <Navigate to="/profile" replace />;
+  }
 }
 
 export default function App() {
@@ -38,6 +52,30 @@ export default function App() {
             <AdminRoute>
               <AdminDashboardPage />
             </AdminRoute>
+          }
+        />
+        <Route
+          path="/teacher-dashboard"
+          element={
+            <ProtectedRoute>
+              <TeacherDashboardPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/learner-dashboard"
+          element={
+            <ProtectedRoute>
+              <LearnerDashboardPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/parent-dashboard"
+          element={
+            <ProtectedRoute>
+              <ParentDashboardPage />
+            </ProtectedRoute>
           }
         />
         <Route path="*" element={<RedirectFromUnknownRoute />} />

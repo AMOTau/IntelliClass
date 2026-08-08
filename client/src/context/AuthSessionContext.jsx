@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { setAuthToken } from '../lib/api';
 import { clearSession, loadStoredSession, storeSession } from '../auth/session';
 
@@ -13,36 +13,38 @@ export function AuthSessionProvider({ children }) {
     setAuthToken(token);
   }, [token]);
 
-  const value = useMemo(() => {
-    function signIn(nextToken, nextUser) {
-      setToken(nextToken);
-      setUser(nextUser);
-      storeSession(nextToken, nextUser);
-    }
+  const signIn = useCallback((nextToken, nextUser) => {
+    setToken(nextToken);
+    setUser(nextUser);
+    storeSession(nextToken, nextUser);
+  }, []);
 
-    function signOut() {
-      setToken('');
-      setUser(null);
-      clearSession();
-      setAuthToken('');
-    }
+  const signOut = useCallback(() => {
+    setToken('');
+    setUser(null);
+    clearSession();
+    setAuthToken('');
+  }, []);
 
-    function updateUser(nextUser) {
-      setUser(nextUser);
-      if (token) {
-        storeSession(token, nextUser);
+  const updateUser = useCallback((nextUser) => {
+    setUser(nextUser);
+    // Access token from closure or use setState callback pattern
+    setToken((currentToken) => {
+      if (currentToken) {
+        storeSession(currentToken, nextUser);
       }
-    }
+      return currentToken;
+    });
+  }, []);
 
-    return {
-      token,
-      user,
-      isAuthed: Boolean(token && user),
-      signIn,
-      signOut,
-      updateUser,
-    };
-  }, [token, user]);
+  const value = useMemo(() => ({
+    token,
+    user,
+    isAuthed: Boolean(token && user),
+    signIn,
+    signOut,
+    updateUser,
+  }), [token, user, signIn, signOut, updateUser]);
 
   return <AuthSessionContext.Provider value={value}>{children}</AuthSessionContext.Provider>;
 }
