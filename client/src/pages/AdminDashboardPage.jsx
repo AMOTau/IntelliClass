@@ -131,18 +131,15 @@ export default function AdminDashboardPage() {
     learnerFirstName: '',
     learnerLastName: '',
     learnerEmail: '',
-    learnerPassword: '',
     classId: '',
     parentFirstName: '',
     parentLastName: '',
     parentEmail: '',
-    parentPassword: '',
   });
   const [teacherForm, setTeacherForm] = useState({
     teacherFirstName: '',
     teacherLastName: '',
     teacherEmail: '',
-    teacherPassword: '',
     classId: '',
     subjectIds: [],
   });
@@ -199,23 +196,22 @@ export default function AdminDashboardPage() {
 
     try {
       const { data } = await api.post('/users/provision-learner-family', learnerForm);
+      const deliveryNote = data.emailSent === false ? ' Credentials email could not be delivered automatically.' : '';
 
       setLearnerForm({
         learnerFirstName: '',
         learnerLastName: '',
         learnerEmail: '',
-        learnerPassword: '',
         classId: '',
         parentFirstName: '',
         parentLastName: '',
         parentEmail: '',
-        parentPassword: '',
       });
 
       setMessage(
         data.parentCreated
-          ? 'Learner and new parent were created and linked successfully.'
-          : 'Learner created and linked to the existing parent successfully.'
+          ? `Learner and new parent were created and linked successfully.${deliveryNote}`
+          : `Learner created and linked to the existing parent successfully.${deliveryNote}`
       );
 
       await loadAdminData();
@@ -233,18 +229,18 @@ export default function AdminDashboardPage() {
     setError('');
 
     try {
-      await api.post('/users/provision-teacher-assignment', teacherForm);
+      const { data } = await api.post('/users/provision-teacher-assignment', teacherForm);
+      const deliveryNote = data.emailSent === false ? ' Credentials email could not be delivered automatically.' : '';
 
       setTeacherForm({
         teacherFirstName: '',
         teacherLastName: '',
         teacherEmail: '',
-        teacherPassword: '',
         classId: '',
         subjectIds: [],
       });
 
-      setMessage('Teacher created and assigned to the selected class subjects successfully.');
+      setMessage(`Teacher created and assigned to the selected class subjects successfully.${deliveryNote}`);
       await loadAdminData();
     } catch (requestError) {
       setError(parseApiError(requestError, 'Failed to create and assign teacher.'));
@@ -401,18 +397,11 @@ export default function AdminDashboardPage() {
                       required
                     />
                   </label>
-                  <label className={LABEL_CLASSES}>
-                    Temporary learner password
-                    <input
-                      type="password"
-                      minLength={8}
-                      className={INPUT_CLASSES}
-                      value={learnerForm.learnerPassword}
-                      onChange={(event) => handleLearnerFieldChange('learnerPassword', event.target.value)}
-                      required
-                    />
-                  </label>
                 </div>
+
+                <p className="text-xs text-slate-400 bg-teal-500/5 border border-teal-500/10 rounded-lg px-3 py-2">
+                  A default password is generated automatically and emailed after the account is created.
+                </p>
 
                 <label className={LABEL_CLASSES}>
                   Class
@@ -467,16 +456,6 @@ export default function AdminDashboardPage() {
                       required
                     />
                   </label>
-                  <label className={LABEL_CLASSES}>
-                    Parent temporary password
-                    <input
-                      type="password"
-                      minLength={8}
-                      className={INPUT_CLASSES}
-                      value={learnerForm.parentPassword}
-                      onChange={(event) => handleLearnerFieldChange('parentPassword', event.target.value)}
-                    />
-                  </label>
                 </div>
 
                 <button type="submit" disabled={saving.learnerFamily} className={PRIMARY_BUTTON}>
@@ -521,18 +500,11 @@ export default function AdminDashboardPage() {
                       required
                     />
                   </label>
-                  <label className={LABEL_CLASSES}>
-                    Temporary teacher password
-                    <input
-                      type="password"
-                      minLength={8}
-                      className={INPUT_CLASSES}
-                      value={teacherForm.teacherPassword}
-                      onChange={(event) => handleTeacherFieldChange('teacherPassword', event.target.value)}
-                      required
-                    />
-                  </label>
                 </div>
+
+                <p className="text-xs text-slate-400 bg-teal-500/5 border border-teal-500/10 rounded-lg px-3 py-2">
+                  A default password is generated automatically and emailed after the account is created.
+                </p>
 
                 <label className={LABEL_CLASSES}>
                   Class

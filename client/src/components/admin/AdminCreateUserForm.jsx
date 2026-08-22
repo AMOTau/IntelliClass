@@ -17,10 +17,6 @@ export default function AdminCreateUserForm({ form, onFieldChange, onSubmit, loa
       </label>
       <div className="field-grid">
         <label>
-          Temporary password
-          <input type="password" minLength={8} value={form.password} onChange={(event) => onFieldChange('password', event.target.value)} required />
-        </label>
-        <label>
           Role
           <select value={form.role} onChange={(event) => onFieldChange('role', event.target.value)}>
             <option value="teacher">Teacher</option>

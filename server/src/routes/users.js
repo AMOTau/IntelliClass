@@ -6,6 +6,8 @@ import { sendCredentialsEmail } from '../utils/email.js';
 
 export const usersRouter = Router();
 
+const DEFAULT_PROVISIONED_PASSWORD = 'Password@1';
+
 function buildPublicUser(user) {
   return {
     id: user.id,
@@ -40,11 +42,11 @@ usersRouter.post('/', requireAuth, requireRole('admin'), async (req, res, next) 
   const client = await pool.connect();
 
   try {
-    const { firstName, lastName, email, role, password } = req.body;
+    const { firstName, lastName, email, role } = req.body;
 
-    if (!firstName || !lastName || !email || !role || !password) {
+    if (!firstName || !lastName || !email || !role) {
       return res.status(400).json({
-        message: 'firstName, lastName, email, role, and password are required.',
+        message: 'firstName, lastName, email, and role are required.',
       });
     }
 
@@ -52,10 +54,6 @@ usersRouter.post('/', requireAuth, requireRole('admin'), async (req, res, next) 
       return res.status(400).json({
         message: 'role must be teacher, learner, or parent for admin provisioning.',
       });
-    }
-
-    if (password.length < 8) {
-      return res.status(400).json({ message: 'password must be at least 8 characters long.' });
     }
 
     const normalizedEmail = email.trim().toLowerCase();
@@ -68,7 +66,7 @@ usersRouter.post('/', requireAuth, requireRole('admin'), async (req, res, next) 
       return res.status(409).json({ message: 'An account with this email already exists.' });
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await bcrypt.hash(DEFAULT_PROVISIONED_PASSWORD, 10);
     const created = await client.query(
       `INSERT INTO users (first_name, last_name, email, password_hash, role)
        VALUES ($1, $2, $3, $4, $5)
@@ -76,17 +74,27 @@ usersRouter.post('/', requireAuth, requireRole('admin'), async (req, res, next) 
       [firstName.trim(), lastName.trim(), normalizedEmail, passwordHash, role]
     );
 
-    await sendCredentialsEmail({
-      to: normalizedEmail,
-      fullName: `${firstName.trim()} ${lastName.trim()}`,
-      role,
-      email: normalizedEmail,
-      password,
-    });
-
     await client.query('COMMIT');
 
-    return res.status(201).json({ user: buildPublicUser(created.rows[0]) });
+    let emailSent = true;
+
+    try {
+      await sendCredentialsEmail({
+        to: normalizedEmail,
+        fullName: `${firstName.trim()} ${lastName.trim()}`,
+        role,
+        email: normalizedEmail,
+        password: DEFAULT_PROVISIONED_PASSWORD,
+      });
+    } catch (emailError) {
+      emailSent = false;
+      console.error('Failed to send credentials email for provisioned user:', emailError);
+    }
+
+    return res.status(201).json({
+      user: buildPublicUser(created.rows[0]),
+      emailSent,
+    });
   } catch (error) {
     try {
       await client.query('ROLLBACK');
@@ -219,23 +227,16 @@ usersRouter.post('/provision-learner-family', requireAuth, requireRole('admin'),
       learnerFirstName,
       learnerLastName,
       learnerEmail,
-      learnerPassword,
       classId,
       parentFirstName,
       parentLastName,
       parentEmail,
-      parentPassword,
     } = req.body;
 
-    if (!learnerFirstName || !learnerLastName || !learnerEmail || !learnerPassword || !classId || !parentEmail) {
+    if (!learnerFirstName || !learnerLastName || !learnerEmail || !classId || !parentEmail) {
       return res.status(400).json({
-        message:
-          'learnerFirstName, learnerLastName, learnerEmail, learnerPassword, classId, and parentEmail are required.',
+        message: 'learnerFirstName, learnerLastName, learnerEmail, classId, and parentEmail are required.',
       });
-    }
-
-    if (learnerPassword.length < 8) {
-      return res.status(400).json({ message: 'learnerPassword must be at least 8 characters long.' });
     }
 
     await client.query('BEGIN');
@@ -267,20 +268,14 @@ usersRouter.post('/provision-learner-family', requireAuth, requireRole('admin'),
 
       parentRow = existingParent.rows[0];
     } else {
-      if (!parentFirstName || !parentLastName || !parentPassword) {
+      if (!parentFirstName || !parentLastName) {
         await client.query('ROLLBACK');
         return res.status(400).json({
-          message:
-            'parentFirstName, parentLastName, and parentPassword are required when parentEmail has no existing account.',
+          message: 'parentFirstName and parentLastName are required when parentEmail has no existing account.',
         });
       }
 
-      if (parentPassword.length < 8) {
-        await client.query('ROLLBACK');
-        return res.status(400).json({ message: 'parentPassword must be at least 8 characters long.' });
-      }
-
-      const parentPasswordHash = await bcrypt.hash(parentPassword, 10);
+      const parentPasswordHash = await bcrypt.hash(DEFAULT_PROVISIONED_PASSWORD, 10);
       const createdParent = await client.query(
         `INSERT INTO users (first_name, last_name, email, password_hash, role)
          VALUES ($1, $2, $3, $4, 'parent')
@@ -298,7 +293,7 @@ usersRouter.post('/provision-learner-family', requireAuth, requireRole('admin'),
       return res.status(409).json({ message: 'An account with learnerEmail already exists.' });
     }
 
-    const learnerPasswordHash = await bcrypt.hash(learnerPassword, 10);
+    const learnerPasswordHash = await bcrypt.hash(DEFAULT_PROVISIONED_PASSWORD, 10);
     const createdLearner = await client.query(
       `INSERT INTO users (first_name, last_name, email, password_hash, role)
        VALUES ($1, $2, $3, $4, 'learner')
@@ -322,13 +317,15 @@ usersRouter.post('/provision-learner-family', requireAuth, requireRole('admin'),
       [parentRow.id, learnerRow.id]
     );
 
+    await client.query('COMMIT');
+
     const emailJobs = [
       sendCredentialsEmail({
         to: normalizedLearnerEmail,
         fullName: `${learnerFirstName.trim()} ${learnerLastName.trim()}`,
         role: 'learner',
         email: normalizedLearnerEmail,
-        password: learnerPassword,
+        password: DEFAULT_PROVISIONED_PASSWORD,
       }),
     ];
 
@@ -339,20 +336,24 @@ usersRouter.post('/provision-learner-family', requireAuth, requireRole('admin'),
           fullName: `${parentFirstName.trim()} ${parentLastName.trim()}`,
           role: 'parent',
           email: normalizedParentEmail,
-          password: parentPassword,
+          password: DEFAULT_PROVISIONED_PASSWORD,
         })
       );
     }
 
-    await Promise.all(emailJobs);
+    const emailResults = await Promise.allSettled(emailJobs);
+    const emailSent = emailResults.every((result) => result.status === 'fulfilled');
 
-    await client.query('COMMIT');
+    if (!emailSent) {
+      console.error('One or more credentials emails failed to send for learner-family provisioning.');
+    }
 
     return res.status(201).json({
       message: 'Learner and parent provisioned successfully.',
       parentCreated,
       learner: buildPublicUser(learnerRow),
       parent: buildPublicUser(parentRow),
+      emailSent,
     });
   } catch (error) {
     try {
@@ -375,23 +376,18 @@ usersRouter.post('/provision-teacher-assignment', requireAuth, requireRole('admi
       teacherFirstName,
       teacherLastName,
       teacherEmail,
-      teacherPassword,
       classId,
       subjectIds,
     } = req.body;
 
-    if (!teacherFirstName || !teacherLastName || !teacherEmail || !teacherPassword || !classId) {
+    if (!teacherFirstName || !teacherLastName || !teacherEmail || !classId) {
       return res.status(400).json({
-        message: 'teacherFirstName, teacherLastName, teacherEmail, teacherPassword, and classId are required.',
+        message: 'teacherFirstName, teacherLastName, teacherEmail, and classId are required.',
       });
     }
 
     if (!Array.isArray(subjectIds) || subjectIds.length === 0) {
       return res.status(400).json({ message: 'subjectIds must be a non-empty array.' });
-    }
-
-    if (teacherPassword.length < 8) {
-      return res.status(400).json({ message: 'teacherPassword must be at least 8 characters long.' });
     }
 
     await client.query('BEGIN');
@@ -418,7 +414,7 @@ usersRouter.post('/provision-teacher-assignment', requireAuth, requireRole('admi
       return res.status(409).json({ message: 'An account with teacherEmail already exists.' });
     }
 
-    const teacherPasswordHash = await bcrypt.hash(teacherPassword, 10);
+    const teacherPasswordHash = await bcrypt.hash(DEFAULT_PROVISIONED_PASSWORD, 10);
     const createdTeacher = await client.query(
       `INSERT INTO users (first_name, last_name, email, password_hash, role)
        VALUES ($1, $2, $3, $4, 'teacher')
@@ -437,19 +433,27 @@ usersRouter.post('/provision-teacher-assignment', requireAuth, requireRole('admi
       );
     }
 
-    await sendCredentialsEmail({
-      to: normalizedTeacherEmail,
-      fullName: `${teacherFirstName.trim()} ${teacherLastName.trim()}`,
-      role: 'teacher',
-      email: normalizedTeacherEmail,
-      password: teacherPassword,
-    });
-
     await client.query('COMMIT');
+
+    let emailSent = true;
+
+    try {
+      await sendCredentialsEmail({
+        to: normalizedTeacherEmail,
+        fullName: `${teacherFirstName.trim()} ${teacherLastName.trim()}`,
+        role: 'teacher',
+        email: normalizedTeacherEmail,
+        password: DEFAULT_PROVISIONED_PASSWORD,
+      });
+    } catch (emailError) {
+      emailSent = false;
+      console.error('Failed to send credentials email for provisioned teacher:', emailError);
+    }
 
     return res.status(201).json({
       message: 'Teacher provisioned and assigned successfully.',
       teacher: buildPublicUser(teacherRow),
+      emailSent,
     });
   } catch (error) {
     try {
