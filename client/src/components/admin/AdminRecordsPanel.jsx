@@ -37,7 +37,7 @@ function getInitials(firstName, lastName) {
   return initials || '?';
 }
 
-function RecordColumn({ icon: Icon, title, accentLabel, records }) {
+function RecordColumn({ icon: Icon, title, accentLabel, records, onSelectUser }) {
   return (
     <div className="rounded-2xl border border-teal-500/10 bg-white/[0.02] backdrop-blur flex flex-col overflow-hidden">
       <div className="flex items-center justify-between px-5 py-4 border-b border-teal-500/10">
@@ -61,19 +61,26 @@ function RecordColumn({ icon: Icon, title, accentLabel, records }) {
         ) : (
           <ul className="divide-y divide-teal-500/5">
             {records.map((record) => (
-              <li key={record.id} className="flex items-center gap-3 px-2 py-2.5 rounded-lg hover:bg-teal-500/5 transition">
-                <div
-                  style={{ width: 32, height: 32 }}
-                  className="flex-shrink-0 rounded-full bg-slate-800 border border-teal-500/20 flex items-center justify-center text-teal-300 text-[11px] font-semibold"
+              <li key={record.id}>
+                <button
+                  type="button"
+                  onClick={() => onSelectUser?.(record)}
+                  className="w-full flex items-center gap-3 px-2 py-2.5 rounded-lg hover:bg-teal-500/5 transition text-left"
                 >
-                  {getInitials(record.firstName, record.lastName)}
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-white truncate">
-                    {record.firstName} {record.lastName}
-                  </p>
-                  <p className="text-xs text-slate-400 truncate">{record.email}</p>
-                </div>
+                  <div
+                    style={{ width: 32, height: 32 }}
+                    className="flex-shrink-0 rounded-full bg-slate-800 border border-teal-500/20 flex items-center justify-center text-teal-300 text-[11px] font-semibold"
+                  >
+                    {getInitials(record.firstName, record.lastName)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-white truncate">
+                      {record.firstName} {record.lastName}
+                    </p>
+                    <p className="text-xs text-slate-400 truncate">{record.email}</p>
+                  </div>
+                  <span className="text-xs font-medium text-teal-300">View / Edit</span>
+                </button>
               </li>
             ))}
           </ul>
@@ -83,12 +90,12 @@ function RecordColumn({ icon: Icon, title, accentLabel, records }) {
   );
 }
 
-export default function AdminRecordsPanel({ teachers, learners, parents }) {
+export default function AdminRecordsPanel({ teachers, learners, parents, onSelectUser }) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-      <RecordColumn icon={TeacherIcon} title="Teachers" accentLabel="teachers" records={teachers} />
-      <RecordColumn icon={LearnerIcon} title="Learners" accentLabel="learners" records={learners} />
-      <RecordColumn icon={ParentIcon} title="Parents" accentLabel="parents" records={parents} />
+      <RecordColumn icon={TeacherIcon} title="Teachers" accentLabel="teachers" records={teachers} onSelectUser={onSelectUser} />
+      <RecordColumn icon={LearnerIcon} title="Learners" accentLabel="learners" records={learners} onSelectUser={onSelectUser} />
+      <RecordColumn icon={ParentIcon} title="Parents" accentLabel="parents" records={parents} onSelectUser={onSelectUser} />
     </div>
   );
 }

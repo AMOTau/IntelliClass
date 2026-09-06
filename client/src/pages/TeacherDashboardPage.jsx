@@ -12,6 +12,11 @@ export default function TeacherDashboardPage() {
     classes: [],
     subjects: [],
     totalLearners: 0,
+    summary: {
+      totalClasses: 0,
+      totalSubjects: 0,
+      totalLearners: 0,
+    },
     recentMaterials: [],
     recentQuizzes: [],
     recentHomework: [],
@@ -79,7 +84,9 @@ export default function TeacherDashboardPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-gray-400 text-sm font-semibold uppercase">Classes Taught</p>
-                  <p className="text-4xl font-bold text-teal-400 mt-2">{dashData.classes.length}</p>
+                  <p className="text-4xl font-bold text-teal-400 mt-2">
+                    {dashData.summary?.totalClasses ?? dashData.classes.length}
+                  </p>
                 </div>
                 <div className="text-5xl opacity-30">📚</div>
               </div>
@@ -89,7 +96,9 @@ export default function TeacherDashboardPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-gray-400 text-sm font-semibold uppercase">Total Learners</p>
-                  <p className="text-4xl font-bold text-teal-400 mt-2">{dashData.totalLearners}</p>
+                  <p className="text-4xl font-bold text-teal-400 mt-2">
+                    {dashData.summary?.totalLearners ?? dashData.totalLearners}
+                  </p>
                 </div>
                 <div className="text-5xl opacity-30">👥</div>
               </div>
@@ -99,7 +108,9 @@ export default function TeacherDashboardPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-gray-400 text-sm font-semibold uppercase">Subjects</p>
-                  <p className="text-4xl font-bold text-teal-400 mt-2">{dashData.subjects.length}</p>
+                  <p className="text-4xl font-bold text-teal-400 mt-2">
+                    {dashData.summary?.totalSubjects ?? dashData.subjects.length}
+                  </p>
                 </div>
                 <div className="text-5xl opacity-30">📖</div>
               </div>

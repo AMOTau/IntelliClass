@@ -22,6 +22,152 @@ function buildPublicUser(user) {
 
 const allowedRoles = new Set(['admin', 'teacher', 'learner', 'parent']);
 
+function normalizeTeacherAssignments(body) {
+  if (Array.isArray(body.assignments)) {
+    return body.assignments
+      .map((assignment) => ({
+        classId: assignment?.classId,
+        subjectIds: Array.isArray(assignment?.subjectIds) ? assignment.subjectIds.filter(Boolean) : [],
+      }))
+      .filter((assignment) => assignment.classId && assignment.subjectIds.length > 0);
+  }
+
+  if (body.classId && Array.isArray(body.subjectIds)) {
+    const subjectIds = body.subjectIds.filter(Boolean);
+    if (subjectIds.length === 0) {
+      return [];
+    }
+
+    return [{ classId: body.classId, subjectIds }];
+  }
+
+  return [];
+}
+
+async function validateTeacherAssignments(client, assignments) {
+  const classIds = [...new Set(assignments.map((assignment) => assignment.classId))];
+  const subjectIds = [...new Set(assignments.flatMap((assignment) => assignment.subjectIds))];
+
+  if (classIds.length === 0 || subjectIds.length === 0) {
+    const error = new Error('Teacher assignments must include at least one class and one subject.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const classRows = await client.query('SELECT id FROM classes WHERE id = ANY($1::uuid[])', [classIds]);
+  if (classRows.rowCount !== classIds.length) {
+    const error = new Error('One or more classIds do not exist.');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const subjectRows = await client.query('SELECT id FROM subjects WHERE id = ANY($1::uuid[])', [subjectIds]);
+  if (subjectRows.rowCount !== subjectIds.length) {
+    const error = new Error('One or more subjectIds do not exist.');
+    error.statusCode = 404;
+    throw error;
+  }
+}
+
+async function insertTeacherAssignments(client, teacherId, assignments) {
+  for (const assignment of assignments) {
+    for (const subjectId of assignment.subjectIds) {
+      await client.query(
+        `INSERT INTO class_subject_teachers (class_id, subject_id, teacher_id)
+         VALUES ($1, $2, $3)
+         ON CONFLICT DO NOTHING`,
+        [assignment.classId, subjectId, teacherId]
+      );
+    }
+  }
+}
+
+async function loadUserDetails(userId, role) {
+  if (role === 'teacher') {
+    const result = await pool.query(
+      `SELECT c.id AS class_id, c.name AS class_name, c.grade_level, c.academic_year,
+              s.id AS subject_id, s.name AS subject_name, s.code AS subject_code
+       FROM class_subject_teachers cst
+       JOIN classes c ON c.id = cst.class_id
+       JOIN subjects s ON s.id = cst.subject_id
+       WHERE cst.teacher_id = $1
+       ORDER BY c.name ASC, s.name ASC`,
+      [userId]
+    );
+
+    const assignmentsByClass = new Map();
+
+    for (const row of result.rows) {
+      if (!assignmentsByClass.has(row.class_id)) {
+        assignmentsByClass.set(row.class_id, {
+          classId: row.class_id,
+          className: row.class_name,
+          gradeLevel: row.grade_level,
+          academicYear: row.academic_year,
+          subjects: [],
+        });
+      }
+
+      assignmentsByClass.get(row.class_id).subjects.push({
+        id: row.subject_id,
+        name: row.subject_name,
+        code: row.subject_code,
+      });
+    }
+
+    return { assignments: [...assignmentsByClass.values()] };
+  }
+
+  if (role === 'learner') {
+    const classResult = await pool.query(
+      `SELECT c.id, c.name, c.grade_level, c.academic_year
+       FROM class_learners cl
+       JOIN classes c ON c.id = cl.class_id
+       WHERE cl.learner_id = $1
+       LIMIT 1`,
+      [userId]
+    );
+
+    const parentsResult = await pool.query(
+      `SELECT u.id, u.role, u.first_name, u.last_name, u.email, u.created_at, u.updated_at
+       FROM users u
+       JOIN parent_learners pl ON u.id = pl.parent_id
+       WHERE pl.learner_id = $1
+       ORDER BY u.first_name ASC, u.last_name ASC`,
+      [userId]
+    );
+
+    return {
+      class: classResult.rows[0] ?? null,
+      parents: parentsResult.rows.map(buildPublicUser),
+    };
+  }
+
+  if (role === 'parent') {
+    const learnersResult = await pool.query(
+      `SELECT u.id, u.role, u.first_name, u.last_name, u.email, u.created_at, u.updated_at
+       FROM users u
+       JOIN parent_learners pl ON u.id = pl.learner_id
+       WHERE pl.parent_id = $1
+       ORDER BY u.first_name ASC, u.last_name ASC`,
+      [userId]
+    );
+
+    return {
+      learners: learnersResult.rows.map(buildPublicUser),
+    };
+  }
+
+  return {};
+}
+
+async function replaceTeacherAssignments(client, teacherId, assignments) {
+  await validateTeacherAssignments(client, assignments);
+
+  await client.query('DELETE FROM class_subject_teachers WHERE teacher_id = $1', [teacherId]);
+  await insertTeacherAssignments(client, teacherId, assignments);
+}
+
 async function ensureUserWithRole(userId, expectedRole, fieldName) {
   const result = await pool.query('SELECT id, role FROM users WHERE id = $1', [userId]);
 
@@ -376,35 +522,25 @@ usersRouter.post('/provision-teacher-assignment', requireAuth, requireRole('admi
       teacherFirstName,
       teacherLastName,
       teacherEmail,
-      classId,
       subjectIds,
+      assignments,
     } = req.body;
 
-    if (!teacherFirstName || !teacherLastName || !teacherEmail || !classId) {
+    if (!teacherFirstName || !teacherLastName || !teacherEmail) {
       return res.status(400).json({
-        message: 'teacherFirstName, teacherLastName, teacherEmail, and classId are required.',
+        message: 'teacherFirstName, teacherLastName, and teacherEmail are required.',
       });
     }
 
-    if (!Array.isArray(subjectIds) || subjectIds.length === 0) {
-      return res.status(400).json({ message: 'subjectIds must be a non-empty array.' });
+    const normalizedAssignments = normalizeTeacherAssignments({ assignments, subjectIds });
+
+    if (normalizedAssignments.length === 0) {
+      return res.status(400).json({ message: 'Provide at least one class and subject assignment.' });
     }
 
     await client.query('BEGIN');
 
-    const classRow = await client.query('SELECT id FROM classes WHERE id = $1', [classId]);
-    if (classRow.rowCount === 0) {
-      await client.query('ROLLBACK');
-      return res.status(404).json({ message: 'classId does not exist.' });
-    }
-
-    const distinctSubjectIds = [...new Set(subjectIds)];
-    const subjectRows = await client.query('SELECT id FROM subjects WHERE id = ANY($1::uuid[])', [distinctSubjectIds]);
-
-    if (subjectRows.rowCount !== distinctSubjectIds.length) {
-      await client.query('ROLLBACK');
-      return res.status(404).json({ message: 'One or more subjectIds do not exist.' });
-    }
+    await validateTeacherAssignments(client, normalizedAssignments);
 
     const normalizedTeacherEmail = teacherEmail.trim().toLowerCase();
     const existingTeacher = await client.query('SELECT id FROM users WHERE email = $1', [normalizedTeacherEmail]);
@@ -424,14 +560,7 @@ usersRouter.post('/provision-teacher-assignment', requireAuth, requireRole('admi
 
     const teacherRow = createdTeacher.rows[0];
 
-    for (const subjectId of distinctSubjectIds) {
-      await client.query(
-        `INSERT INTO class_subject_teachers (class_id, subject_id, teacher_id)
-         VALUES ($1, $2, $3)
-         ON CONFLICT DO NOTHING`,
-        [classId, subjectId, teacherRow.id]
-      );
-    }
+    await insertTeacherAssignments(client, teacherRow.id, normalizedAssignments);
 
     await client.query('COMMIT');
 
@@ -525,6 +654,207 @@ usersRouter.put('/profile', requireAuth, async (req, res, next) => {
     }
 
     return res.json({ user: buildPublicUser(result.rows[0]) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+usersRouter.get('/:userId', requireAuth, requireRole('admin'), async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+
+    const result = await pool.query(
+      `SELECT id, role, first_name, last_name, email, created_at, updated_at
+       FROM users
+       WHERE id = $1`,
+      [userId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    const user = buildPublicUser(result.rows[0]);
+    const details = await loadUserDetails(user.id, user.role);
+
+    return res.json({ user, details });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+usersRouter.put('/:userId', requireAuth, requireRole('admin'), async (req, res, next) => {
+  const client = await pool.connect();
+
+  try {
+    const { userId } = req.params;
+    const { firstName, lastName, email, classId, assignments, subjectIds } = req.body;
+
+    const userResult = await client.query(
+      `SELECT id, role, first_name, last_name, email, created_at, updated_at
+       FROM users
+       WHERE id = $1`,
+      [userId]
+    );
+
+    if (userResult.rowCount === 0) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    const currentUser = userResult.rows[0];
+    const updates = [];
+    const values = [];
+    let index = 1;
+
+    if (typeof firstName === 'string') {
+      const trimmedFirstName = firstName.trim();
+
+      if (!trimmedFirstName) {
+        return res.status(400).json({ message: 'firstName cannot be empty.' });
+      }
+
+      updates.push(`first_name = $${index++}`);
+      values.push(trimmedFirstName);
+    }
+
+    if (typeof lastName === 'string') {
+      const trimmedLastName = lastName.trim();
+
+      if (!trimmedLastName) {
+        return res.status(400).json({ message: 'lastName cannot be empty.' });
+      }
+
+      updates.push(`last_name = $${index++}`);
+      values.push(trimmedLastName);
+    }
+
+    if (typeof email === 'string') {
+      const normalizedEmail = email.trim().toLowerCase();
+
+      if (!normalizedEmail) {
+        return res.status(400).json({ message: 'email cannot be empty.' });
+      }
+
+      const existingUser = await client.query('SELECT id FROM users WHERE email = $1 AND id <> $2', [normalizedEmail, userId]);
+
+      if (existingUser.rowCount > 0) {
+        return res.status(409).json({ message: 'An account with this email already exists.' });
+      }
+
+      updates.push(`email = $${index++}`);
+      values.push(normalizedEmail);
+    }
+
+    const assignmentInputProvided =
+      Object.prototype.hasOwnProperty.call(req.body, 'assignments') ||
+      Object.prototype.hasOwnProperty.call(req.body, 'subjectIds');
+    const normalizedAssignments = normalizeTeacherAssignments({ assignments, classId, subjectIds });
+
+    await client.query('BEGIN');
+
+    if (updates.length > 0) {
+      updates.push('updated_at = now()');
+      values.push(userId);
+
+      const updated = await client.query(
+        `UPDATE users
+         SET ${updates.join(', ')}
+         WHERE id = $${index}
+         RETURNING id, role, first_name, last_name, email, created_at, updated_at`,
+        values
+      );
+
+      if (updated.rowCount === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ message: 'User not found.' });
+      }
+
+      currentUser.id = updated.rows[0].id;
+      currentUser.role = updated.rows[0].role;
+      currentUser.first_name = updated.rows[0].first_name;
+      currentUser.last_name = updated.rows[0].last_name;
+      currentUser.email = updated.rows[0].email;
+      currentUser.created_at = updated.rows[0].created_at;
+      currentUser.updated_at = updated.rows[0].updated_at;
+    }
+
+    if (currentUser.role === 'learner' && Object.prototype.hasOwnProperty.call(req.body, 'classId')) {
+      if (!classId) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ message: 'classId cannot be empty for learner updates.' });
+      }
+
+      const classRow = await client.query('SELECT id FROM classes WHERE id = $1', [classId]);
+      if (classRow.rowCount === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ message: 'classId does not exist.' });
+      }
+
+      await client.query(
+        `INSERT INTO class_learners (class_id, learner_id)
+         VALUES ($1, $2)
+         ON CONFLICT (learner_id) DO UPDATE SET class_id = EXCLUDED.class_id`,
+        [classId, userId]
+      );
+    }
+
+    if (currentUser.role === 'teacher' && assignmentInputProvided) {
+      if (normalizedAssignments.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ message: 'Provide at least one class and subject assignment.' });
+      }
+
+      await replaceTeacherAssignments(client, userId, normalizedAssignments);
+    }
+
+    if (currentUser.role !== 'teacher' && assignmentInputProvided) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Only teacher assignments can be updated with class and subject groups.' });
+    }
+
+    await client.query('COMMIT');
+
+    const refreshedUserResult = await pool.query(
+      `SELECT id, role, first_name, last_name, email, created_at, updated_at
+       FROM users
+       WHERE id = $1`,
+      [userId]
+    );
+
+    const user = buildPublicUser(refreshedUserResult.rows[0]);
+    const details = await loadUserDetails(user.id, user.role);
+
+    return res.json({ user, details });
+  } catch (error) {
+    try {
+      await client.query('ROLLBACK');
+    } catch {
+      // no-op
+    }
+
+    return next(error);
+  } finally {
+    client.release();
+  }
+});
+
+usersRouter.delete('/:userId', requireAuth, requireRole('admin'), async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+
+    const userResult = await pool.query('SELECT id, role FROM users WHERE id = $1', [userId]);
+
+    if (userResult.rowCount === 0) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    if (userResult.rows[0].role === 'admin') {
+      return res.status(400).json({ message: 'Admin accounts cannot be deleted from this screen.' });
+    }
+
+    await pool.query('DELETE FROM users WHERE id = $1', [userId]);
+
+    return res.json({ message: 'User deleted successfully.' });
   } catch (error) {
     return next(error);
   }

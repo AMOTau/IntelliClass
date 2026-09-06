@@ -7,7 +7,18 @@ export const dashboardRouter = Router();
 // Teacher Dashboard
 dashboardRouter.get('/teacher', requireAuth, async (req, res, next) => {
   try {
-    const teacherId = req.user.id;
+    const teacherId = req.user.sub;
+
+    const summaryResult = await pool.query(
+      `SELECT
+         COUNT(DISTINCT cst.class_id) AS total_classes,
+         COUNT(DISTINCT cst.subject_id) AS total_subjects,
+         COUNT(DISTINCT cl.learner_id) AS total_learners
+       FROM class_subject_teachers cst
+       LEFT JOIN class_learners cl ON cl.class_id = cst.class_id
+       WHERE cst.teacher_id = $1`,
+      [teacherId]
+    );
 
     // Get classes taught by this teacher
     const classesResult = await pool.query(
@@ -72,7 +83,12 @@ dashboardRouter.get('/teacher', requireAuth, async (req, res, next) => {
     res.json({
       classes: classesResult.rows,
       subjects: subjectsResult.rows,
-      totalLearners: parseInt(learnersResult.rows[0].total_learners),
+      summary: {
+        totalClasses: parseInt(summaryResult.rows[0].total_classes, 10),
+        totalSubjects: parseInt(summaryResult.rows[0].total_subjects, 10),
+        totalLearners: parseInt(summaryResult.rows[0].total_learners, 10),
+      },
+      totalLearners: parseInt(learnersResult.rows[0].total_learners, 10),
       recentMaterials: materialsResult.rows,
       recentQuizzes: quizzesResult.rows,
       recentHomework: homeworkResult.rows,
@@ -85,7 +101,7 @@ dashboardRouter.get('/teacher', requireAuth, async (req, res, next) => {
 // Learner Dashboard
 dashboardRouter.get('/learner', requireAuth, async (req, res, next) => {
   try {
-    const learnerId = req.user.id;
+    const learnerId = req.user.sub;
 
     // Get classes enrolled in
     const classesResult = await pool.query(
@@ -141,7 +157,7 @@ dashboardRouter.get('/learner', requireAuth, async (req, res, next) => {
 // Parent Dashboard
 dashboardRouter.get('/parent', requireAuth, async (req, res, next) => {
   try {
-    const parentId = req.user.id;
+    const parentId = req.user.sub;
 
     // Get children linked to parent
     const childrenResult = await pool.query(

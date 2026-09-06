@@ -117,6 +117,329 @@ function SubjectChip({ label, checked, onChange }) {
   );
 }
 
+function createTeacherAssignmentBlock(values = {}) {
+  return {
+    id: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    classId: values.classId ?? '',
+    subjectIds: values.subjectIds ?? [],
+  };
+}
+
+function AssignmentBlocksEditor({
+  title,
+  assignments,
+  classes,
+  subjects,
+  onAddAssignment,
+  onRemoveAssignment,
+  onAssignmentClassChange,
+  onToggleSubject,
+}) {
+  const selectedClassIds = new Set(assignments.map((assignment) => assignment.classId).filter(Boolean));
+
+  return (
+    <div className="space-y-4">
+      <h3 className={SECTION_HEADING}>{title}</h3>
+      <p className="text-xs text-slate-400 bg-teal-500/5 border border-teal-500/10 rounded-lg px-3 py-2">
+        Add one block per class. Pick the class, then select the subjects taught in that class.
+      </p>
+      <div className="space-y-4">
+        {assignments.map((assignment, index) => (
+          <div key={assignment.id} className="rounded-2xl border border-teal-500/10 bg-slate-950/30 p-4 space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-semibold text-white">Class assignment {index + 1}</p>
+              {assignments.length > 1 ? (
+                <button
+                  type="button"
+                  onClick={() => onRemoveAssignment(assignment.id)}
+                  className="text-xs font-medium text-rose-300 hover:text-rose-200 transition"
+                >
+                  Remove
+                </button>
+              ) : null}
+            </div>
+
+            <label className={LABEL_CLASSES}>
+              Class
+              <select
+                className={INPUT_CLASSES}
+                value={assignment.classId}
+                onChange={(event) => onAssignmentClassChange(assignment.id, event.target.value)}
+                required
+              >
+                <option value="">Select class</option>
+                {classes.map((classItem) => (
+                  <option
+                    key={classItem.id}
+                    value={classItem.id}
+                    disabled={selectedClassIds.has(classItem.id) && assignment.classId !== classItem.id}
+                  >
+                    {classItem.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div>
+              <p className="text-xs font-semibold text-teal-300 uppercase tracking-wide">Subjects</p>
+              <div className="flex flex-wrap gap-2 mt-2">
+                {subjects.map((subject) => (
+                  <SubjectChip
+                    key={subject.id}
+                    label={subject.name}
+                    checked={assignment.subjectIds.includes(subject.id)}
+                    onChange={() => onToggleSubject(assignment.id, subject.id)}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <button type="button" onClick={onAddAssignment} className={PRIMARY_BUTTON}>
+        Add another class
+      </button>
+    </div>
+  );
+}
+
+function UserDetailModal({
+  selectedUser,
+  selectedUserDetails,
+  detailForm,
+  classes,
+  subjects,
+  savingDetails,
+  deletingUser,
+  onClose,
+  onFieldChange,
+  onClassChange,
+  onAssignmentClassChange,
+  onAddAssignment,
+  onRemoveAssignment,
+  onToggleAssignmentSubject,
+  onSave,
+  onDelete,
+}) {
+  if (!selectedUser || !detailForm) {
+    return null;
+  }
+
+  const assignmentSummary = selectedUser.role === 'teacher' ? selectedUserDetails?.assignments ?? [] : [];
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm px-4 py-6 overflow-y-auto">
+      <div className="mx-auto w-full max-w-4xl rounded-3xl border border-teal-500/15 bg-slate-950 shadow-2xl overflow-hidden">
+        <div className="flex items-start justify-between gap-4 px-6 py-5 border-b border-teal-500/10 bg-white/[0.02]">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-teal-300">User details</p>
+            <h3 className="text-2xl font-bold text-white mt-1">
+              {selectedUser.firstName} {selectedUser.lastName}
+            </h3>
+            <p className="text-sm text-slate-400 mt-1 capitalize">{selectedUser.role}</p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-sm font-medium text-slate-400 hover:text-white transition"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] gap-6 p-6">
+          <div className="space-y-6">
+            <div className="rounded-2xl border border-teal-500/10 bg-white/[0.02] p-5 space-y-4">
+              <div className={FIELD_GRID}>
+                <label className={LABEL_CLASSES}>
+                  First name
+                  <input
+                    className={INPUT_CLASSES}
+                    value={detailForm.firstName}
+                    onChange={(event) => onFieldChange('firstName', event.target.value)}
+                    required
+                  />
+                </label>
+                <label className={LABEL_CLASSES}>
+                  Last name
+                  <input
+                    className={INPUT_CLASSES}
+                    value={detailForm.lastName}
+                    onChange={(event) => onFieldChange('lastName', event.target.value)}
+                    required
+                  />
+                </label>
+              </div>
+
+              <label className={LABEL_CLASSES}>
+                Email
+                <input
+                  type="email"
+                  className={INPUT_CLASSES}
+                  value={detailForm.email}
+                  onChange={(event) => onFieldChange('email', event.target.value)}
+                  required
+                />
+              </label>
+
+              {selectedUser.role === 'learner' ? (
+                <label className={LABEL_CLASSES}>
+                  Class
+                  <select
+                    className={INPUT_CLASSES}
+                    value={detailForm.classId}
+                    onChange={(event) => onClassChange(event.target.value)}
+                    required
+                  >
+                    <option value="">Select class</option>
+                    {classes.map((classItem) => (
+                      <option key={classItem.id} value={classItem.id}>
+                        {classItem.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+
+              {selectedUser.role === 'teacher' ? (
+                <AssignmentBlocksEditor
+                  title="Teaching assignments"
+                  assignments={detailForm.assignments}
+                  classes={classes}
+                  subjects={subjects}
+                  onAddAssignment={onAddAssignment}
+                  onRemoveAssignment={onRemoveAssignment}
+                  onAssignmentClassChange={onAssignmentClassChange}
+                  onToggleSubject={onToggleAssignmentSubject}
+                />
+              ) : null}
+
+              <div className="flex flex-wrap gap-3 pt-2">
+                <button type="button" onClick={onSave} disabled={savingDetails} className={PRIMARY_BUTTON}>
+                  {savingDetails ? 'Saving…' : 'Save Changes'}
+                </button>
+                <button
+                  type="button"
+                  onClick={onDelete}
+                  disabled={deletingUser}
+                  className="inline-flex items-center justify-center gap-2 bg-rose-500/15 hover:bg-rose-500/25 border border-rose-400/20 text-rose-200 font-semibold px-5 py-2.5 rounded-lg transition text-sm mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {deletingUser ? 'Deleting…' : 'Delete User'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-teal-500/10 bg-white/[0.02] p-5">
+              <h4 className="text-sm font-semibold text-white">Summary</h4>
+              <dl className="mt-4 space-y-3 text-sm">
+                <div>
+                  <dt className="text-slate-500">Role</dt>
+                  <dd className="text-white capitalize">{selectedUser.role}</dd>
+                </div>
+                <div>
+                  <dt className="text-slate-500">Email</dt>
+                  <dd className="text-white break-all">{selectedUser.email}</dd>
+                </div>
+                <div>
+                  <dt className="text-slate-500">Created</dt>
+                  <dd className="text-white">{new Date(selectedUser.createdAt).toLocaleString()}</dd>
+                </div>
+                <div>
+                  <dt className="text-slate-500">Updated</dt>
+                  <dd className="text-white">{new Date(selectedUser.updatedAt).toLocaleString()}</dd>
+                </div>
+              </dl>
+            </div>
+
+            {selectedUser.role === 'teacher' ? (
+              <div className="rounded-2xl border border-teal-500/10 bg-white/[0.02] p-5">
+                <h4 className="text-sm font-semibold text-white">Current assignments</h4>
+                <div className="mt-4 space-y-3">
+                  {assignmentSummary.length === 0 ? (
+                    <p className="text-sm text-slate-400">No class assignments yet.</p>
+                  ) : (
+                    assignmentSummary.map((assignment) => (
+                      <div key={assignment.classId} className="rounded-xl border border-teal-500/10 bg-slate-950/40 p-3">
+                        <p className="text-sm font-medium text-white">{assignment.className}</p>
+                        <p className="text-xs text-slate-400 mt-1">
+                          {assignment.subjects.map((subject) => subject.name).join(', ')}
+                        </p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            ) : null}
+
+            {selectedUser.role === 'learner' ? (
+              <div className="rounded-2xl border border-teal-500/10 bg-white/[0.02] p-5">
+                <h4 className="text-sm font-semibold text-white">Current class</h4>
+                <p className="mt-3 text-sm text-slate-300">
+                  {selectedUserDetails?.class ? selectedUserDetails.class.name : 'No class assigned.'}
+                </p>
+              </div>
+            ) : null}
+
+            {selectedUser.role === 'parent' ? (
+              <div className="rounded-2xl border border-teal-500/10 bg-white/[0.02] p-5">
+                <h4 className="text-sm font-semibold text-white">Linked learners</h4>
+                <div className="mt-4 space-y-2">
+                  {selectedUserDetails?.learners?.length ? (
+                    selectedUserDetails.learners.map((learner) => (
+                      <p key={learner.id} className="text-sm text-slate-300">
+                        {learner.firstName} {learner.lastName}
+                      </p>
+                    ))
+                  ) : (
+                    <p className="text-sm text-slate-400">No linked learners.</p>
+                  )}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function buildDetailForm(selectedUser, selectedUserDetails) {
+  if (!selectedUser) {
+    return null;
+  }
+
+  const baseForm = {
+    firstName: selectedUser.firstName ?? '',
+    lastName: selectedUser.lastName ?? '',
+    email: selectedUser.email ?? '',
+    classId: '',
+    assignments: [createTeacherAssignmentBlock()],
+  };
+
+  if (selectedUser.role === 'learner') {
+    baseForm.classId = selectedUserDetails?.class?.id ?? '';
+  }
+
+  if (selectedUser.role === 'teacher') {
+    const assignments = selectedUserDetails?.assignments ?? [];
+
+    baseForm.assignments = assignments.length
+      ? assignments.map((assignment) =>
+          createTeacherAssignmentBlock({
+            classId: assignment.classId,
+            subjectIds: assignment.subjects.map((subject) => subject.id),
+          })
+        )
+      : [createTeacherAssignmentBlock()];
+  }
+
+  return baseForm;
+}
+
 export default function AdminDashboardPage() {
   const { user, signOut } = useAuthSession();
   const [activeTab, setActiveTab] = useState('learners');
@@ -127,6 +450,13 @@ export default function AdminDashboardPage() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState({ learnerFamily: false, teacherAssignment: false });
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [selectedUserDetails, setSelectedUserDetails] = useState(null);
+  const [selectedUserLoading, setSelectedUserLoading] = useState(false);
+  const [selectedUserError, setSelectedUserError] = useState('');
+  const [detailForm, setDetailForm] = useState(null);
+  const [savingDetails, setSavingDetails] = useState(false);
+  const [deletingUser, setDeletingUser] = useState(false);
   const [learnerForm, setLearnerForm] = useState({
     learnerFirstName: '',
     learnerLastName: '',
@@ -140,8 +470,7 @@ export default function AdminDashboardPage() {
     teacherFirstName: '',
     teacherLastName: '',
     teacherEmail: '',
-    classId: '',
-    subjectIds: [],
+    assignments: [createTeacherAssignmentBlock()],
   });
 
   async function loadAdminData() {
@@ -236,8 +565,7 @@ export default function AdminDashboardPage() {
         teacherFirstName: '',
         teacherLastName: '',
         teacherEmail: '',
-        classId: '',
-        subjectIds: [],
+        assignments: [createTeacherAssignmentBlock()],
       });
 
       setMessage(`Teacher created and assigned to the selected class subjects successfully.${deliveryNote}`);
@@ -246,6 +574,216 @@ export default function AdminDashboardPage() {
       setError(parseApiError(requestError, 'Failed to create and assign teacher.'));
     } finally {
       setSaving((current) => ({ ...current, teacherAssignment: false }));
+    }
+  }
+
+  function handleTeacherAssignmentChange(assignmentId, value) {
+    setTeacherForm((current) => ({
+      ...current,
+      assignments: current.assignments.map((assignment) =>
+        assignment.id === assignmentId ? { ...assignment, classId: value } : assignment
+      ),
+    }));
+  }
+
+  function handleTeacherAssignmentToggleSubject(assignmentId, subjectId) {
+    setTeacherForm((current) => ({
+      ...current,
+      assignments: current.assignments.map((assignment) => {
+        if (assignment.id !== assignmentId) {
+          return assignment;
+        }
+
+        const subjectIds = assignment.subjectIds.includes(subjectId)
+          ? assignment.subjectIds.filter((item) => item !== subjectId)
+          : [...assignment.subjectIds, subjectId];
+
+        return {
+          ...assignment,
+          subjectIds,
+        };
+      }),
+    }));
+  }
+
+  function addTeacherAssignmentBlock() {
+    setTeacherForm((current) => ({
+      ...current,
+      assignments: [...current.assignments, createTeacherAssignmentBlock()],
+    }));
+  }
+
+  function removeTeacherAssignmentBlock(assignmentId) {
+    setTeacherForm((current) => ({
+      ...current,
+      assignments: current.assignments.length > 1
+        ? current.assignments.filter((assignment) => assignment.id !== assignmentId)
+        : current.assignments,
+    }));
+  }
+
+  async function openUserDetails(record) {
+    setSelectedUserLoading(true);
+    setSelectedUserError('');
+    setSelectedUser(record);
+    setSelectedUserDetails(null);
+    setDetailForm(null);
+
+    try {
+      const { data } = await api.get(`/users/${record.id}`);
+      setSelectedUserDetails(data.details ?? null);
+      setDetailForm(buildDetailForm(data.user, data.details ?? null));
+    } catch (requestError) {
+      setSelectedUserError(parseApiError(requestError, 'Failed to load user details.'));
+    } finally {
+      setSelectedUserLoading(false);
+    }
+  }
+
+  function closeUserDetails() {
+    setSelectedUser(null);
+    setSelectedUserDetails(null);
+    setSelectedUserError('');
+    setDetailForm(null);
+    setSavingDetails(false);
+    setDeletingUser(false);
+  }
+
+  function handleDetailFieldChange(field, value) {
+    setDetailForm((current) => (current ? { ...current, [field]: value } : current));
+  }
+
+  function handleDetailClassChange(value) {
+    setDetailForm((current) => (current ? { ...current, classId: value } : current));
+  }
+
+  function addDetailAssignmentBlock() {
+    setDetailForm((current) =>
+      current
+        ? {
+            ...current,
+            assignments: [...current.assignments, createTeacherAssignmentBlock()],
+          }
+        : current
+    );
+  }
+
+  function removeDetailAssignmentBlock(assignmentId) {
+    setDetailForm((current) =>
+      current
+        ? {
+            ...current,
+            assignments:
+              current.assignments.length > 1
+                ? current.assignments.filter((assignment) => assignment.id !== assignmentId)
+                : current.assignments,
+          }
+        : current
+    );
+  }
+
+  function handleDetailAssignmentChange(assignmentId, value) {
+    setDetailForm((current) =>
+      current
+        ? {
+            ...current,
+            assignments: current.assignments.map((assignment) =>
+              assignment.id === assignmentId ? { ...assignment, classId: value } : assignment
+            ),
+          }
+        : current
+    );
+  }
+
+  function handleDetailAssignmentToggleSubject(assignmentId, subjectId) {
+    setDetailForm((current) =>
+      current
+        ? {
+            ...current,
+            assignments: current.assignments.map((assignment) => {
+              if (assignment.id !== assignmentId) {
+                return assignment;
+              }
+
+              const subjectIds = assignment.subjectIds.includes(subjectId)
+                ? assignment.subjectIds.filter((item) => item !== subjectId)
+                : [...assignment.subjectIds, subjectId];
+
+              return {
+                ...assignment,
+                subjectIds,
+              };
+            }),
+          }
+        : current
+    );
+  }
+
+  async function handleSaveUserDetails() {
+    if (!selectedUser || !detailForm) {
+      return;
+    }
+
+    setSavingDetails(true);
+    setSelectedUserError('');
+
+    try {
+      const payload = {
+        firstName: detailForm.firstName,
+        lastName: detailForm.lastName,
+        email: detailForm.email,
+      };
+
+      if (selectedUser.role === 'learner') {
+        payload.classId = detailForm.classId;
+      }
+
+      if (selectedUser.role === 'teacher') {
+        payload.assignments = detailForm.assignments.map((assignment) => ({
+          classId: assignment.classId,
+          subjectIds: assignment.subjectIds,
+        }));
+      }
+
+      const { data } = await api.put(`/users/${selectedUser.id}`, payload);
+
+      setSelectedUser(data.user);
+      setSelectedUserDetails(data.details ?? null);
+      setDetailForm(buildDetailForm(data.user, data.details ?? null));
+      setMessage(`Updated ${data.user.role} details successfully.`);
+      await loadAdminData();
+    } catch (requestError) {
+      setSelectedUserError(parseApiError(requestError, 'Failed to update user.'));
+    } finally {
+      setSavingDetails(false);
+    }
+  }
+
+  async function handleDeleteUser() {
+    if (!selectedUser) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Delete ${selectedUser.firstName} ${selectedUser.lastName}? This action cannot be undone.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletingUser(true);
+    setSelectedUserError('');
+
+    try {
+      await api.delete(`/users/${selectedUser.id}`);
+      setMessage(`Deleted ${selectedUser.role} successfully.`);
+      closeUserDetails();
+      await loadAdminData();
+    } catch (requestError) {
+      setSelectedUserError(parseApiError(requestError, 'Failed to delete user.'));
+    } finally {
+      setDeletingUser(false);
     }
   }
 
@@ -506,36 +1044,16 @@ export default function AdminDashboardPage() {
                   A default password is generated automatically and emailed after the account is created.
                 </p>
 
-                <label className={LABEL_CLASSES}>
-                  Class
-                  <select
-                    className={INPUT_CLASSES}
-                    value={teacherForm.classId}
-                    onChange={(event) => handleTeacherFieldChange('classId', event.target.value)}
-                    required
-                  >
-                    <option value="">Select class</option>
-                    {classes.map((classItem) => (
-                      <option key={classItem.id} value={classItem.id}>
-                        {classItem.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <div>
-                  <h3 className={SECTION_HEADING}>Subjects to Teach</h3>
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {subjects.map((subject) => (
-                      <SubjectChip
-                        key={subject.id}
-                        label={subject.name}
-                        checked={teacherForm.subjectIds.includes(subject.id)}
-                        onChange={() => handleSubjectToggle(subject.id)}
-                      />
-                    ))}
-                  </div>
-                </div>
+                <AssignmentBlocksEditor
+                  title="Class assignments"
+                  assignments={teacherForm.assignments}
+                  classes={classes}
+                  subjects={subjects}
+                  onAddAssignment={addTeacherAssignmentBlock}
+                  onRemoveAssignment={removeTeacherAssignmentBlock}
+                  onAssignmentClassChange={handleTeacherAssignmentChange}
+                  onToggleSubject={handleTeacherAssignmentToggleSubject}
+                />
 
                 <button type="submit" disabled={saving.teacherAssignment} className={PRIMARY_BUTTON}>
                   {saving.teacherAssignment ? 'Saving…' : 'Add Teacher and Assign Subjects'}
@@ -547,11 +1065,50 @@ export default function AdminDashboardPage() {
           {activeTab === 'records' ? (
             <AdminSectionCard title="Current Records" className="section-card--wide">
               <AdminSummaryChips counts={counts} />
-              <AdminRecordsPanel teachers={teachers} learners={learners} parents={parents} />
+              <AdminRecordsPanel teachers={teachers} learners={learners} parents={parents} onSelectUser={openUserDetails} />
             </AdminSectionCard>
           ) : null}
         </section>
       </main>
+
+      {selectedUser ? (
+        selectedUserLoading ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm px-4">
+            <div className="rounded-2xl border border-teal-500/15 bg-slate-950 px-6 py-5 text-slate-200 shadow-2xl">
+              Loading user details...
+            </div>
+          </div>
+        ) : selectedUserError ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm px-4">
+            <div className="w-full max-w-lg rounded-2xl border border-red-400/20 bg-slate-950 px-6 py-5 text-red-200 shadow-2xl">
+              <div className="flex items-start justify-between gap-4">
+                <p>{selectedUserError}</p>
+                <button type="button" onClick={closeUserDetails} className="text-red-200 hover:text-white">
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <UserDetailModal
+            selectedUser={selectedUser}
+            selectedUserDetails={selectedUserDetails}
+            detailForm={detailForm}
+            classes={classes}
+            subjects={subjects}
+            savingDetails={savingDetails}
+            deletingUser={deletingUser}
+            onClose={closeUserDetails}
+            onFieldChange={handleDetailFieldChange}
+            onClassChange={handleDetailClassChange}
+            onAddAssignment={addDetailAssignmentBlock}
+            onRemoveAssignment={removeDetailAssignmentBlock}
+            onToggleAssignmentSubject={handleDetailAssignmentToggleSubject}
+            onSave={handleSaveUserDetails}
+            onDelete={handleDeleteUser}
+          />
+        )
+      ) : null}
     </div>
   );
 }
