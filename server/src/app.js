@@ -2,11 +2,13 @@ import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import { fileURLToPath } from 'node:url';
 import { env } from './config/env.js';
 import { authRouter } from './routes/auth.js';
 import { classesRouter } from './routes/classes.js';
 import { dashboardRouter } from './routes/dashboard.js';
 import { healthRouter } from './routes/health.js';
+import { materialsRouter } from './routes/materials.js';
 import { subjectsRouter } from './routes/subjects.js';
 import { usersRouter } from './routes/users.js';
 
@@ -22,6 +24,7 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan(env.nodeEnv === 'production' ? 'combined' : 'dev'));
+app.use('/uploads', express.static(fileURLToPath(new URL('../uploads', import.meta.url))));
 
 app.get('/', (req, res) => {
   res.json({
@@ -35,6 +38,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/classes', classesRouter);
 app.use('/api/subjects', subjectsRouter);
+app.use('/api/materials', materialsRouter);
 app.use('/api/users', usersRouter);
 
 app.use((req, res) => {
