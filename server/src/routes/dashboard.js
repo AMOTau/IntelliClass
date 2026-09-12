@@ -122,14 +122,29 @@ dashboardRouter.get('/learner', requireAuth, async (req, res, next) => {
       [learnerId]
     );
 
-    // Get available quizzes
     const quizzesResult = await pool.query(
-      `SELECT q.id, q.title, q.status, q.created_at
+      `SELECT q.id, q.title, q.status, q.created_at, c.name AS class_name, s.name AS subject_name,
+              qs.score, qs.submitted_at
        FROM quizzes q
-       WHERE q.status = 'published'
+       JOIN class_learners cl ON cl.class_id = q.class_id
+       LEFT JOIN classes c ON c.id = q.class_id
+       LEFT JOIN subjects s ON s.id = q.subject_id
+       LEFT JOIN quiz_submissions qs ON qs.quiz_id = q.id AND qs.learner_id = $1
+       WHERE cl.learner_id = $1
+         AND q.status = 'published'
        ORDER BY q.created_at DESC
        LIMIT 10`,
-      []
+      [learnerId]
+    );
+
+    const materialsResult = await pool.query(
+      `SELECT m.id, m.title, m.subject, m.class_name, m.created_at, m.file_name, m.file_path
+       FROM materials m
+       JOIN class_learners cl ON cl.class_id = m.class_id
+       WHERE cl.learner_id = $1
+       ORDER BY m.created_at DESC
+       LIMIT 12`,
+      [learnerId]
     );
 
     // Get submission stats
@@ -144,9 +159,13 @@ dashboardRouter.get('/learner', requireAuth, async (req, res, next) => {
       classes: classesResult.rows,
       assignedHomework: homeworkResult.rows,
       availableQuizzes: quizzesResult.rows,
+      studyMaterials: materialsResult.rows.map((material) => ({
+        ...material,
+        fileUrl: `/uploads/${material.file_path}`,
+      })),
       submissionStats: {
-        totalSubmissions: parseInt(submissionsResult.rows[0].total_submissions),
-        completed: parseInt(submissionsResult.rows[0].completed),
+        totalSubmissions: parseInt(submissionsResult.rows[0].total_submissions, 10),
+        completed: parseInt(submissionsResult.rows[0].completed || 0, 10),
       },
     });
   } catch (error) {
@@ -182,12 +201,12 @@ dashboardRouter.get('/parent', requireAuth, async (req, res, next) => {
 
     // Get recent quiz results for children
     const quizResultsResult = await pool.query(
-      `SELECT s.id, s.score, s.quiz_id, q.title, u.first_name, u.last_name, s.created_at
-       FROM submissions s
-       JOIN quizzes q ON s.quiz_id = q.id
-       JOIN users u ON s.learner_id = u.id
-       WHERE s.learner_id IN (SELECT learner_id FROM parent_learners WHERE parent_id = $1)
-       ORDER BY s.created_at DESC
+      `SELECT qs.id, qs.score, qs.quiz_id, qs.learner_id, q.title, u.first_name, u.last_name, qs.submitted_at AS created_at
+       FROM quiz_submissions qs
+       JOIN quizzes q ON qs.quiz_id = q.id
+       JOIN users u ON qs.learner_id = u.id
+       WHERE qs.learner_id IN (SELECT learner_id FROM parent_learners WHERE parent_id = $1)
+       ORDER BY qs.submitted_at DESC
        LIMIT 15`,
       [parentId]
     );

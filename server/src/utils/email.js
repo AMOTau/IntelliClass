@@ -72,3 +72,31 @@ export async function sendCredentialsEmail({ to, fullName, role, email, password
     ].join('\n'),
   });
 }
+
+export async function sendQuizNotificationEmail({ to, fullName, quizTitle, className, subjectName }) {
+  if (!env.smtpHost || !env.smtpUser || !env.smtpPass) {
+    return;
+  }
+
+  const mailer = getTransporter();
+  const fromAddress = env.smtpFrom || env.smtpUser;
+
+  await mailer.sendMail({
+    from: fromAddress,
+    to,
+    subject: `New IntelliClass quiz: ${quizTitle}`,
+    text: [
+      `Hello ${fullName},`,
+      '',
+      `A new quiz has been published for ${className || 'your learner\'s class'}.`,
+      subjectName ? `Subject: ${subjectName}` : null,
+      `Quiz: ${quizTitle}`,
+      '',
+      'Please check your learner dashboard for the updated quiz list.',
+      '',
+      'IntelliClass Team',
+    ]
+      .filter(Boolean)
+      .join('\n'),
+  });
+}

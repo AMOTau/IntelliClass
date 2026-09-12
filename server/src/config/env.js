@@ -22,4 +22,6 @@ export const env = {
   smtpUser: process.env.SMTP_USER ?? '',
   smtpPass: process.env.SMTP_PASS ?? '',
   smtpFrom: process.env.SMTP_FROM ?? '',
+  huggingFaceToken: process.env.HUGGINGFACE_TOKEN ?? process.env.HF_TOKEN ?? '',
+  huggingFaceModel: process.env.HUGGINGFACE_MODEL ?? 'mistralai/Mistral-7B-Instruct-v0.3',
 };

@@ -113,22 +113,6 @@ export default function ParentDashboardPage() {
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-12">
-            <button className="bg-gradient-to-r from-teal-600 to-teal-700 hover:from-teal-700 hover:to-teal-800 text-white font-semibold py-3 px-4 rounded-lg transition">
-              📋 View Reports
-            </button>
-            <button className="bg-gradient-to-r from-teal-600 to-teal-700 hover:from-teal-700 hover:to-teal-800 text-white font-semibold py-3 px-4 rounded-lg transition">
-              💬 Message Teacher
-            </button>
-            <button
-              onClick={loadParentData}
-              className="bg-gradient-to-r from-gray-700 to-gray-800 hover:from-gray-800 hover:to-gray-900 text-white font-semibold py-3 px-4 rounded-lg transition"
-            >
-              🔄 Refresh
-            </button>
-          </div>
-
           {/* Your Children */}
           <div className="mb-12">
             <h2 className="text-2xl font-bold text-white mb-6">Your Children</h2>
@@ -145,14 +129,7 @@ export default function ParentDashboardPage() {
                       {child.first_name} {child.last_name}
                     </h3>
                     <p className="text-sm text-gray-400 mt-2">{child.email}</p>
-                    <div className="mt-6 flex space-x-2">
-                      <button className="flex-1 bg-gradient-to-r from-teal-600 to-teal-700 hover:from-teal-700 hover:to-teal-800 text-white font-semibold py-2 px-3 rounded-lg transition text-sm">
-                        View Profile
-                      </button>
-                      <button className="flex-1 bg-gradient-to-r from-teal-600 to-teal-700 hover:from-teal-700 hover:to-teal-800 text-white font-semibold py-2 px-3 rounded-lg transition text-sm">
-                        Progress
-                      </button>
-                    </div>
+                    <p className="text-teal-300 mt-4 font-semibold">Average quiz score: {calculateAverageScore(child.id)}%</p>
                   </div>
                 ))}
               </div>

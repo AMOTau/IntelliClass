@@ -9,6 +9,7 @@ import { classesRouter } from './routes/classes.js';
 import { dashboardRouter } from './routes/dashboard.js';
 import { healthRouter } from './routes/health.js';
 import { materialsRouter } from './routes/materials.js';
+import { aiRouter, quizzesRouter } from './routes/quizzes.js';
 import { subjectsRouter } from './routes/subjects.js';
 import { usersRouter } from './routes/users.js';
 
@@ -39,6 +40,8 @@ app.use('/api/dashboard', dashboardRouter);
 app.use('/api/classes', classesRouter);
 app.use('/api/subjects', subjectsRouter);
 app.use('/api/materials', materialsRouter);
+app.use('/api/ai', aiRouter);
+app.use('/api/quizzes', quizzesRouter);
 app.use('/api/users', usersRouter);
 
 app.use((req, res) => {
@@ -48,7 +51,7 @@ app.use((req, res) => {
 });
 
 app.use((error, req, res, next) => {
-  const statusCode = error.statusCode ?? 500;
+  const statusCode = error.statusCode ?? (error.name === 'MulterError' ? 400 : 500);
   res.status(statusCode).json({
     message: error.message ?? 'Internal server error',
   });
