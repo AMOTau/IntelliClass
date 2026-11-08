@@ -1,18 +1,51 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import DashboardShell, {
+  AlertBanner,
+  PageHeader,
+} from '../components/ui/DashboardShell';
+import {
+  FieldIcon,
+  FormActions,
+  FormCard,
+  FormField,
+  FormHelpCard,
+  FormStep,
+  FormSubmitButton,
+} from '../components/ui/FormKit';
 import { useAuthSession } from '../context/AuthSessionContext';
 import { api } from '../lib/api';
+import { dashboardPathForRole, tabsForRole } from '../utils/dashNav';
 import { parseApiError } from '../utils/errors';
+
+const roleCopy = {
+  admin: 'Office',
+  teacher: 'Staff desk',
+  learner: 'Learner desk',
+  parent: 'Parent desk',
+};
 
 export default function ProfilePage() {
   const { user, signOut, updateUser } = useAuthSession();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [phone, setPhone] = useState(user?.phone || '');
+  const [notice, setNotice] = useState('');
+
+  const dashboardPath = dashboardPathForRole(user?.role);
+  const navTabs = tabsForRole(user?.role);
+
+  function goDashboardTab(id) {
+    navigate(`${dashboardPath}${id === 'overview' ? '' : `?tab=${id}`}`);
+  }
 
   useEffect(() => {
     async function refreshProfile() {
       try {
         const { data } = await api.get('/users/profile');
         updateUser(data.user);
+        setPhone(data.user.phone || '');
       } catch (requestError) {
         setError(parseApiError(requestError, 'Failed to load profile.'));
       }
@@ -35,129 +68,109 @@ export default function ProfilePage() {
     }
   }
 
-  const roleIcons = {
-    admin: '👨‍💼',
-    teacher: '👨‍🏫',
-    learner: '👨‍🎓',
-    parent: '👨‍👩‍👧',
-  };
+  async function handleSavePhone(event) {
+    event.preventDefault();
+    setLoading(true);
+    setError('');
+    setNotice('');
+    try {
+      const { data } = await api.put('/users/profile', { phone });
+      updateUser(data.user);
+      setNotice('Saved. This number is included when you write to parents.');
+    } catch (requestError) {
+      setError(parseApiError(requestError, 'Could not save your number.'));
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-blue-950 to-slate-950">
-      {/* Header */}
-      <header className="bg-gradient-to-r from-slate-950 to-blue-950 border-b border-teal-500/20 text-white shadow-xl">
-        <div className="max-w-5xl mx-auto px-6 py-8">
-          <div className="flex justify-between items-center">
-            <div>
-              <div className="flex items-center space-x-2 mb-4">
-                <span className="text-2xl">📚</span>
-                <p className="text-teal-400 text-sm font-semibold">IntelliClass</p>
-              </div>
-              <h1 className="text-4xl font-bold">Welcome, {user?.firstName}</h1>
-              <p className="text-gray-400 mt-2">You are signed in as a {user?.role}.</p>
+    <DashboardShell
+      onSignOut={signOut}
+      variant={user?.role === 'learner' ? 'learner' : 'default'}
+      tabs={navTabs}
+      activeTab=""
+      onTabChange={goDashboardTab}
+    >
+      <button type="button" onClick={() => goDashboardTab('overview')} className="ic-btn-ghost text-sm mb-4">
+        ← Back to dashboard
+      </button>
+
+      <PageHeader
+        kicker={roleCopy[user?.role] || 'Account'}
+        title={`${user?.firstName} ${user?.lastName}`}
+        subtitle={`Signed in as ${user?.role}. This is the school register card for your account.`}
+        doodle={false}
+        actions={(
+          <button type="button" onClick={handleRefresh} disabled={loading} className="ic-btn-ghost text-sm">
+            {loading ? 'Refreshing…' : 'Refresh'}
+          </button>
+        )}
+      />
+
+      <AlertBanner>{error}</AlertBanner>
+      <AlertBanner tone="ok">{notice}</AlertBanner>
+
+      <div className="fk-layout fk-layout--split">
+        <FormCard>
+          <FormStep step={1} title="Profile details">
+            <div className="fk-grid fk-grid--2">
+              <FormField label="Full name" icon={FieldIcon.person}>
+                <input value={`${user?.firstName || ''} ${user?.lastName || ''}`.trim()} readOnly />
+              </FormField>
+              <FormField label="Role" icon={FieldIcon.school}>
+                <input value={user?.role || ''} readOnly className="capitalize" />
+              </FormField>
+              <FormField label="Email" icon={FieldIcon.mail} className="fk-span-2">
+                <input value={user?.email || ''} readOnly />
+              </FormField>
+              <FormField label="Member since" icon={FieldIcon.calendar} className="fk-span-2">
+                <input
+                  value={user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : '—'}
+                  readOnly
+                />
+              </FormField>
             </div>
-            <div className="flex gap-3">
-              <button
-                onClick={handleRefresh}
-                disabled={loading}
-                className="px-6 py-2 bg-gray-700 hover:bg-gray-800 text-white font-semibold rounded-lg transition disabled:opacity-50"
-              >
-                {loading ? 'Refreshing...' : 'Refresh Profile'}
-              </button>
-              <button
-                onClick={signOut}
-                className="px-6 py-2 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-lg transition"
-              >
-                Sign Out
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
+          </FormStep>
 
-      {error && (
-        <div className="max-w-5xl mx-auto px-6 py-4 mt-4">
-          <div className="bg-red-500/20 border border-red-500/50 text-red-200 px-4 py-3 rounded-lg">
-            {error}
-          </div>
-        </div>
-      )}
+          {user?.role === 'teacher' ? (
+            <form onSubmit={handleSavePhone}>
+              <FormStep step={2} title="Phone (parents can call you)">
+                <FormField label="Phone number" icon={FieldIcon.phone}>
+                  <input
+                    value={phone}
+                    onChange={(event) => setPhone(event.target.value)}
+                    placeholder="e.g. 082 000 0000"
+                  />
+                </FormField>
+              </FormStep>
+              <FormActions>
+                <span />
+                <FormSubmitButton disabled={loading} busyLabel="Saving…">
+                  Save number
+                </FormSubmitButton>
+              </FormActions>
+            </form>
+          ) : null}
+        </FormCard>
 
-      {/* Profile Card */}
-      <main className="max-w-5xl mx-auto px-6 py-12">
-        <div className="bg-gradient-to-br from-slate-900/50 to-slate-800/50 backdrop-blur border border-teal-500/30 rounded-lg shadow-xl p-8">
-          <div className="flex items-start gap-8">
-            {/* Avatar */}
-            <div className="flex-shrink-0">
-              <div className="w-24 h-24 rounded-lg bg-gradient-to-br from-teal-600 to-teal-700 flex items-center justify-center">
-                <span className="text-5xl">{roleIcons[user?.role] || '👤'}</span>
-              </div>
-            </div>
-
-            {/* Profile Info */}
-            <div className="flex-1">
-              <h2 className="text-3xl font-bold text-white mb-6">Profile Details</h2>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Full Name */}
-                <div>
-                  <label className="block text-gray-400 text-sm font-semibold mb-2 uppercase">Full Name</label>
-                  <p className="text-white text-lg font-medium">
-                    {user?.firstName} {user?.lastName}
-                  </p>
-                </div>
-
-                {/* Email */}
-                <div>
-                  <label className="block text-gray-400 text-sm font-semibold mb-2 uppercase">Email</label>
-                  <p className="text-white text-lg font-medium break-all">{user?.email}</p>
-                </div>
-
-                {/* Role */}
-                <div>
-                  <label className="block text-gray-400 text-sm font-semibold mb-2 uppercase">Role</label>
-                  <div className="flex items-center gap-2">
-                    <span className="text-2xl">{roleIcons[user?.role] || '👤'}</span>
-                    <span className="text-white text-lg font-medium capitalize">{user?.role}</span>
-                  </div>
-                </div>
-
-                {/* Join Date */}
-                <div>
-                  <label className="block text-gray-400 text-sm font-semibold mb-2 uppercase">Member Since</label>
-                  <p className="text-white text-lg font-medium">
-                    {new Date(user?.createdAt).toLocaleDateString()}
-                  </p>
-                </div>
-              </div>
-
-              {/* User ID */}
-              <div className="mt-6 pt-6 border-t border-teal-500/30">
-                <label className="block text-gray-400 text-sm font-semibold mb-2 uppercase">User ID</label>
-                <p className="text-gray-300 text-sm font-mono bg-slate-800/50 px-4 py-2 rounded border border-teal-500/20 break-all">
-                  {user?.id}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Quick Stats */}
-          <div className="mt-8 pt-8 border-t border-teal-500/30 grid grid-cols-3 gap-4">
-            <div className="text-center">
-              <p className="text-gray-400 text-sm mb-1">Account Status</p>
-              <p className="text-teal-400 font-semibold">Active</p>
-            </div>
-            <div className="text-center">
-              <p className="text-gray-400 text-sm mb-1">Authorization</p>
-              <p className="text-teal-400 font-semibold">Full Access</p>
-            </div>
-            <div className="text-center">
-              <p className="text-gray-400 text-sm mb-1">Platform</p>
-              <p className="text-teal-400 font-semibold">IntelliClass</p>
-            </div>
-          </div>
-        </div>
-      </main>
-    </div>
+        <aside className="fk-aside">
+          <FormHelpCard
+            items={
+              user?.role === 'teacher'
+                ? [
+                    'Your phone number is shared when you write to parents.',
+                    'Keep your email up to date with the school office.',
+                    'Use Refresh if details look out of date.',
+                  ]
+                : [
+                    'Profile details come from the school register.',
+                    'Ask the office if your name or email needs changing.',
+                  ]
+            }
+          />
+        </aside>
+      </div>
+    </DashboardShell>
   );
 }

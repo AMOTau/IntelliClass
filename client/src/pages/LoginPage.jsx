@@ -1,25 +1,22 @@
-import { useState } from 'react';
-import { useNavigate, Navigate, Link } from 'react-router-dom';
-import AuthPageShell from '../components/AuthPageShell';
+import { useEffect, useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import BrandMark from '../components/BrandMark';
 import { useAuthSession } from '../context/AuthSessionContext';
 import { api } from '../lib/api';
 import { parseApiError } from '../utils/errors';
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const { isAuthed, signIn, user } = useAuthSession();
+  const { signIn, signOut } = useAuthSession();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  if (isAuthed) {
-    if (user?.role === 'admin') return <Navigate to="/admin" replace />;
-    if (user?.role === 'teacher') return <Navigate to="/teacher-dashboard" replace />;
-    if (user?.role === 'learner') return <Navigate to="/learner-dashboard" replace />;
-    if (user?.role === 'parent') return <Navigate to="/parent-dashboard" replace />;
-    return <Navigate to="/profile" replace />;
-  }
+  // Always show a fresh login form — never auto-enter as the previous user.
+  useEffect(() => {
+    signOut();
+  }, [signOut]);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -29,14 +26,14 @@ export default function LoginPage() {
     try {
       const { data } = await api.post('/auth/login', { email, password });
       signIn(data.token, data.user);
-      
+
       const navigationMap = {
         admin: '/admin',
         teacher: '/teacher-dashboard',
         learner: '/learner-dashboard',
         parent: '/parent-dashboard',
       };
-      
+
       navigate(navigationMap[data.user.role] || '/profile');
     } catch (requestError) {
       setError(parseApiError(requestError, 'Login failed. Please try again.'));
@@ -46,56 +43,107 @@ export default function LoginPage() {
   }
 
   return (
-    <AuthPageShell
-      title="Sign In to IntelliClass"
-      subtitle="Accounts are provisioned by administrators for teachers, learners, parents, and admins."
-    >
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block text-white font-semibold mb-2">Email Address</label>
-          <input
-            type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="you@example.com"
-            required
-            className="w-full px-4 py-3 bg-slate-800/50 border border-teal-500/30 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-teal-500/60 transition"
-          />
-        </div>
+    <div className="relative min-h-screen w-full overflow-hidden">
+      <style>{`
+        .login-field::placeholder {
+          letter-spacing: 0.08em;
+        }
+        #login-password.login-field::placeholder {
+          letter-spacing: 0.28em;
+        }
+      `}</style>
 
-        <div>
-          <label className="block text-white font-semibold mb-2">Password</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder="••••••••"
-            required
-            className="w-full px-4 py-3 bg-slate-800/50 border border-teal-500/30 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-teal-500/60 transition"
-          />
-        </div>
-
-        {error && (
-          <div className="bg-red-500/20 border border-red-500/50 text-red-200 px-4 py-3 rounded-lg text-sm">
-            {error}
-          </div>
-        )}
-
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full bg-gradient-to-r from-teal-600 to-teal-700 hover:from-teal-700 hover:to-teal-800 text-white font-semibold py-3 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed mt-6"
-        >
-          {loading ? 'Signing In...' : 'Sign In'}
-        </button>
-      </form>
-
-      <div className="mt-6 space-y-3 text-center">
-        <p className="text-gray-400 text-sm">Need access? Contact your school administrator for account setup.</p>
-        <Link to="/" className="text-teal-400 hover:text-teal-300 font-semibold transition">
-          ← Back to Home
-        </Link>
+      {/* Full-bleed login background — same light wash approach as landing */}
+      <div className="absolute inset-0" aria-hidden="true">
+        <img
+          src="/Login-image.png"
+          alt=""
+          className="h-full w-full object-cover object-center opacity-80"
+        />
+        <div className="absolute inset-0 bg-gradient-to-r from-white/25 via-transparent to-white/30" />
       </div>
-    </AuthPageShell>
+
+      {/* Starts just after the boy silhouette glow; left side stays open */}
+      <main
+        className="relative z-10 min-h-screen flex items-center pr-6 sm:pr-10 py-10"
+        style={{ paddingLeft: '52%' }}
+      >
+        <div className="w-full max-w-[19rem] bg-transparent">
+          <div className="text-center mb-8">
+            <div className="flex justify-center mb-3">
+              <BrandMark size={64} />
+            </div>
+            <p className="font-scribble text-3xl text-slate-900 tracking-wide">
+              Intelli<span className="text-teal-600">Class</span>
+            </p>
+            <h1 className="font-chalk mt-3 text-2xl sm:text-3xl text-slate-900 tracking-wide">
+              Sign In to IntelliClass
+            </h1>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="flex items-baseline gap-2 border-b border-teal-600/70 pb-2">
+              <label htmlFor="login-email" className="shrink-0 text-slate-800 font-semibold">
+                Email:
+              </label>
+              <input
+                id="login-email"
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="name@school.example.com"
+                required
+                className="login-field min-w-0 flex-1 bg-transparent border-0 outline-none ring-0 shadow-none text-slate-800 placeholder-slate-400/90 py-1 focus:outline-none focus:ring-0"
+              />
+            </div>
+
+            <div className="flex items-baseline gap-2 border-b border-teal-600/70 pb-2">
+              <label htmlFor="login-password" className="shrink-0 text-slate-800 font-semibold">
+                Password:
+              </label>
+              <input
+                id="login-password"
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="••••••••••••••••"
+                required
+                className="login-field min-w-0 flex-1 bg-transparent border-0 outline-none ring-0 shadow-none text-slate-800 placeholder-slate-400/90 py-1 focus:outline-none focus:ring-0"
+              />
+            </div>
+
+            {error ? (
+              <div className="bg-rose-50/80 border border-rose-200 text-rose-700 px-4 py-3 rounded-xl text-sm">
+                {error}
+              </div>
+            ) : null}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full mt-2 inline-flex items-center justify-center gap-2.5 bg-transparent border border-teal-600 text-teal-700 hover:bg-teal-50/60 font-semibold py-2.5 px-5 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <img
+                src="/icons8-backpack-48.png"
+                alt=""
+                width={22}
+                height={22}
+                className="shrink-0"
+              />
+              <span>{loading ? 'Signing In...' : 'Sign In'}</span>
+            </button>
+          </form>
+
+          <div className="mt-8 space-y-3 text-center">
+            <p className="text-slate-700 text-sm leading-relaxed font-medium">
+              Need access? Contact your school administrator for account setup.
+            </p>
+            <Link to="/" className="inline-block text-teal-700 hover:text-teal-600 font-semibold transition">
+              ← Back to Home
+            </Link>
+          </div>
+        </div>
+      </main>
+    </div>
   );
 }

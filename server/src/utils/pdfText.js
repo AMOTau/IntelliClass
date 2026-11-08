@@ -3,7 +3,8 @@ import { readFile } from 'node:fs/promises';
 
 const require = createRequire(import.meta.url);
 
-export const MAX_STORED_TEXT_CHARS = 80000;
+export const LEGACY_STORED_TEXT_CHARS = 80000;
+export const MAX_STORED_TEXT_CHARS = 400000;
 export const MAX_AI_TEXT_CHARS = 12000;
 
 export function cleanExtractedText(rawText) {

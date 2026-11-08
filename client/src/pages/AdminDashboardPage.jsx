@@ -1,69 +1,42 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import DashboardShell, {
+  AlertBanner,
+  ComposeCard,
+  EmptyState,
+  PageHeader,
+  Panel,
+  RowCard,
+  StatusPill,
+} from '../components/ui/DashboardShell';
+import {
+  FieldIcon,
+  FormActions,
+  FormCancelButton,
+  FormCard,
+  FormField,
+  FormGrid,
+  FormHelpCard,
+  FormPage,
+  FormPreviewCard,
+  FormStatCard,
+  FormStep,
+  FormSubmitButton,
+} from '../components/ui/FormKit';
+import {
+  IconClasses,
+  IconLearners,
+  IconRecords,
+  IconSubjects,
+  IconTeachers,
+} from '../components/ui/DashIcons';
 import { useAuthSession } from '../context/AuthSessionContext';
 import { api } from '../lib/api';
+import { resolveActiveTab, tabsForRole } from '../utils/dashNav';
 import { parseApiError } from '../utils/errors';
-import AdminSectionCard from '../components/admin/AdminSectionCard';
+import AdminOverview from '../components/admin/AdminOverview';
 import AdminSummaryChips from '../components/admin/AdminSummaryChips';
 import AdminRecordsPanel from '../components/admin/AdminRecordsPanel';
-
-/*
-  NOTE
-  ----
-  This file only restyles markup that lives directly in
-  AdminDashboardPage.jsx. AdminSectionCard, AdminSummaryChips, and
-  AdminRecordsPanel are still imported and used exactly as before —
-  I don't have their source, so I left them untouched rather than
-  guess at their internals. If you share those three files I can
-  bring them in line with this styling too.
-
-  All previous custom class names (admin-tab, field-grid, form-help,
-  success-note, error-note, subject-checkbox-grid, etc.) have been
-  replaced with explicit Tailwind utility classes, since those class
-  names aren't defined anywhere in this file and may not exist in
-  your stylesheet.
-*/
-
-/* ---------- Small inline icon set (explicit width/height, no reliance on Tailwind sizing) ---------- */
-
-const TeacherIcon = ({ size = 20 }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}>
-    <circle cx="12" cy="7.5" r="3" />
-    <path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6" />
-    <path d="M12 3.5 4 6.5l8 3 8-3-8-3Z" />
-  </svg>
-);
-
-const LearnerIcon = ({ size = 20 }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}>
-    <circle cx="12" cy="8" r="3.2" />
-    <path d="M5.5 20c0-3.4 2.9-5.8 6.5-5.8s6.5 2.4 6.5 5.8" />
-  </svg>
-);
-
-const ParentIcon = ({ size = 20 }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}>
-    <circle cx="9" cy="8" r="2.6" />
-    <path d="M4 19c0-2.7 2.2-4.5 5-4.5s5 1.8 5 4.5" />
-    <circle cx="17" cy="7.5" r="2" />
-    <path d="M15.3 12.3c1.8.2 3.7 1.6 3.7 4.2" />
-  </svg>
-);
-
-const ClassIcon = ({ size = 20 }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}>
-    <rect x="3.5" y="3.5" width="7" height="7" rx="1.4" />
-    <rect x="13.5" y="3.5" width="7" height="7" rx="1.4" />
-    <rect x="3.5" y="13.5" width="7" height="7" rx="1.4" />
-    <rect x="13.5" y="13.5" width="7" height="7" rx="1.4" />
-  </svg>
-);
-
-const SubjectIcon = ({ size = 20 }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}>
-    <path d="M3 5.5C3 4.67 3.67 4 4.5 4H10a2 2 0 0 1 2 2v13.5C11.4 19 9 18 4.5 18A1.5 1.5 0 0 1 3 16.5v-11Z" />
-    <path d="M21 5.5c0-.83-.67-1.5-1.5-1.5H14a2 2 0 0 0-2 2v13.5c.6-.5 3-1.5 7.5-1.5A1.5 1.5 0 0 0 21 16.5v-11Z" />
-  </svg>
-);
 
 const RefreshIcon = ({ size = 16 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}>
@@ -73,44 +46,17 @@ const RefreshIcon = ({ size = 16 }) => (
   </svg>
 );
 
-/* ---------- Shared style tokens ---------- */
+const PRIMARY_BUTTON = 'ic-btn-primary text-sm disabled:opacity-50 disabled:cursor-not-allowed';
 
-const INPUT_CLASSES =
-  'w-full bg-slate-900/60 border border-teal-500/20 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-400/40 focus:border-teal-400/50 transition';
-
-const LABEL_CLASSES = 'flex flex-col gap-1.5 text-sm font-medium text-slate-300';
-
-const FIELD_GRID = 'grid grid-cols-1 sm:grid-cols-2 gap-4';
-
-const SECTION_HEADING = 'text-xs font-semibold text-teal-300 uppercase tracking-wide mt-1';
-
-const PRIMARY_BUTTON =
-  'inline-flex items-center justify-center gap-2 bg-gradient-to-r from-teal-400 to-teal-500 hover:from-teal-300 hover:to-teal-400 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 font-semibold px-5 py-2.5 rounded-lg transition text-sm mt-2';
-
-/* Stat card for the always-visible KPI row */
-function StatCard({ icon: Icon, label, value }) {
-  return (
-    <div className="flex items-center gap-4 rounded-2xl border border-teal-500/10 bg-white/[0.02] backdrop-blur px-5 py-4 hover:border-teal-400/30 transition">
-      <div
-        style={{ width: 44, height: 44 }}
-        className="flex-shrink-0 rounded-xl bg-teal-500/10 border border-teal-400/30 flex items-center justify-center text-teal-300"
-      >
-        <Icon size={20} />
-      </div>
-      <div className="min-w-0">
-        <p className="text-2xl font-bold text-white leading-none">{value}</p>
-        <p className="text-xs text-slate-400 mt-1 truncate">{label}</p>
-      </div>
-    </div>
-  );
-}
-
-/* Chip-style checkbox used for subject selection */
 function SubjectChip({ label, checked, onChange }) {
   return (
     <label className="relative cursor-pointer select-none">
       <input type="checkbox" className="peer sr-only" checked={checked} onChange={onChange} />
-      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-teal-500/20 bg-slate-900/40 text-xs font-medium text-slate-300 transition peer-checked:bg-teal-500/20 peer-checked:border-teal-400/60 peer-checked:text-teal-200 peer-focus-visible:ring-2 peer-focus-visible:ring-teal-400/50">
+      <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition ${
+        checked
+          ? 'border-teal-500 bg-teal-500 text-white'
+          : 'border-teal-200 bg-white text-slate-600'
+      }`}>
         {label}
       </span>
     </label>
@@ -138,51 +84,49 @@ function AssignmentBlocksEditor({
   const selectedClassIds = new Set(assignments.map((assignment) => assignment.classId).filter(Boolean));
 
   return (
-    <div className="space-y-4">
-      <h3 className={SECTION_HEADING}>{title}</h3>
-      <p className="text-xs text-slate-400 bg-teal-500/5 border border-teal-500/10 rounded-lg px-3 py-2">
-        Add one block per class. Pick the class, then select the subjects taught in that class.
-      </p>
-      <div className="space-y-4">
+    <div className="space-y-4 sm:col-span-2">
+      <div>
+        <p className="ic-compose-title">{title}</p>
+        <p className="ic-help !mt-0">
+          Add one block per class. Pick the class, then select the subjects taught there.
+        </p>
+      </div>
+      <div className="space-y-3">
         {assignments.map((assignment, index) => (
-          <div key={assignment.id} className="rounded-2xl border border-teal-500/10 bg-slate-950/30 p-4 space-y-4">
+          <div key={assignment.id} className="ic-compose !mb-0 space-y-3">
             <div className="flex items-center justify-between gap-3">
-              <p className="text-sm font-semibold text-white">Class assignment {index + 1}</p>
+              <p className="text-sm font-semibold text-slate-800">Class assignment {index + 1}</p>
               {assignments.length > 1 ? (
                 <button
                   type="button"
                   onClick={() => onRemoveAssignment(assignment.id)}
-                  className="text-xs font-medium text-rose-300 hover:text-rose-200 transition"
+                  className="ic-btn-danger"
                 >
                   Remove
                 </button>
               ) : null}
             </div>
 
-            <label className={LABEL_CLASSES}>
-              Class
-              <select
-                className={INPUT_CLASSES}
-                value={assignment.classId}
-                onChange={(event) => onAssignmentClassChange(assignment.id, event.target.value)}
-                required
-              >
-                <option value="">Select class</option>
-                {classes.map((classItem) => (
-                  <option
-                    key={classItem.id}
-                    value={classItem.id}
-                    disabled={selectedClassIds.has(classItem.id) && assignment.classId !== classItem.id}
-                  >
-                    {classItem.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <select
+              value={assignment.classId}
+              onChange={(event) => onAssignmentClassChange(assignment.id, event.target.value)}
+              required
+            >
+              <option value="">Select class</option>
+              {classes.map((classItem) => (
+                <option
+                  key={classItem.id}
+                  value={classItem.id}
+                  disabled={selectedClassIds.has(classItem.id) && assignment.classId !== classItem.id}
+                >
+                  {classItem.name}
+                </option>
+              ))}
+            </select>
 
             <div>
-              <p className="text-xs font-semibold text-teal-300 uppercase tracking-wide">Subjects</p>
-              <div className="flex flex-wrap gap-2 mt-2">
+              <p className="ic-compose-title !mb-2">Subjects</p>
+              <div className="flex flex-wrap gap-2">
                 {subjects.map((subject) => (
                   <SubjectChip
                     key={subject.id}
@@ -197,7 +141,7 @@ function AssignmentBlocksEditor({
         ))}
       </div>
 
-      <button type="button" onClick={onAddAssignment} className={PRIMARY_BUTTON}>
+      <button type="button" onClick={onAddAssignment} className="ic-btn-soft">
         Add another class
       </button>
     </div>
@@ -229,68 +173,52 @@ function UserDetailModal({
   const assignmentSummary = selectedUser.role === 'teacher' ? selectedUserDetails?.assignments ?? [] : [];
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm px-4 py-6 overflow-y-auto">
-      <div className="mx-auto w-full max-w-4xl rounded-3xl border border-teal-500/15 bg-slate-950 shadow-2xl overflow-hidden">
-        <div className="flex items-start justify-between gap-4 px-6 py-5 border-b border-teal-500/10 bg-white/[0.02]">
+    <div className="ic-modal-backdrop">
+      <div className="ic-modal overflow-hidden p-0 max-w-4xl">
+        <div className="flex items-start justify-between gap-4 px-6 py-5 border-b border-teal-100">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-teal-300">User details</p>
-            <h3 className="text-2xl font-bold text-white mt-1">
+            <p className="ic-kicker">School register</p>
+            <h3 className="font-scribble text-2xl text-teal-900 mt-1 tracking-wide">
               {selectedUser.firstName} {selectedUser.lastName}
             </h3>
-            <p className="text-sm text-slate-400 mt-1 capitalize">{selectedUser.role}</p>
+            <p className="text-sm text-slate-500 mt-1 capitalize">{selectedUser.role}</p>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-sm font-medium text-slate-400 hover:text-white transition"
-          >
+          <button type="button" onClick={onClose} className="ic-btn-ghost text-sm">
             Close
           </button>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] gap-6 p-6">
-          <div className="space-y-6">
-            <div className="rounded-2xl border border-teal-500/10 bg-white/[0.02] p-5 space-y-4">
-              <div className={FIELD_GRID}>
-                <label className={LABEL_CLASSES}>
-                  First name
-                  <input
-                    className={INPUT_CLASSES}
-                    value={detailForm.firstName}
-                    onChange={(event) => onFieldChange('firstName', event.target.value)}
-                    required
-                  />
-                </label>
-                <label className={LABEL_CLASSES}>
-                  Last name
-                  <input
-                    className={INPUT_CLASSES}
-                    value={detailForm.lastName}
-                    onChange={(event) => onFieldChange('lastName', event.target.value)}
-                    required
-                  />
-                </label>
-              </div>
-
-              <label className={LABEL_CLASSES}>
-                Email
+        <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] gap-5 p-6">
+          <div className="space-y-4">
+            <ComposeCard title="Edit details">
+              <div className="ic-form-grid">
                 <input
-                  type="email"
-                  className={INPUT_CLASSES}
-                  value={detailForm.email}
-                  onChange={(event) => onFieldChange('email', event.target.value)}
+                  value={detailForm.firstName}
+                  onChange={(event) => onFieldChange('firstName', event.target.value)}
+                  placeholder="First name"
                   required
                 />
-              </label>
+                <input
+                  value={detailForm.lastName}
+                  onChange={(event) => onFieldChange('lastName', event.target.value)}
+                  placeholder="Last name"
+                  required
+                />
+                <input
+                  type="email"
+                  value={detailForm.email}
+                  onChange={(event) => onFieldChange('email', event.target.value)}
+                  placeholder="Email"
+                  className="sm:col-span-2"
+                  required
+                />
 
-              {selectedUser.role === 'learner' ? (
-                <label className={LABEL_CLASSES}>
-                  Class
+                {selectedUser.role === 'learner' ? (
                   <select
-                    className={INPUT_CLASSES}
                     value={detailForm.classId}
                     onChange={(event) => onClassChange(event.target.value)}
+                    className="sm:col-span-2"
                     required
                   >
                     <option value="">Select class</option>
@@ -300,72 +228,72 @@ function UserDetailModal({
                       </option>
                     ))}
                   </select>
-                </label>
-              ) : null}
+                ) : null}
 
-              {selectedUser.role === 'teacher' ? (
-                <AssignmentBlocksEditor
-                  title="Teaching assignments"
-                  assignments={detailForm.assignments}
-                  classes={classes}
-                  subjects={subjects}
-                  onAddAssignment={onAddAssignment}
-                  onRemoveAssignment={onRemoveAssignment}
-                  onAssignmentClassChange={onAssignmentClassChange}
-                  onToggleSubject={onToggleAssignmentSubject}
-                />
-              ) : null}
+                {selectedUser.role === 'teacher' ? (
+                  <AssignmentBlocksEditor
+                    title="Teaching assignments"
+                    assignments={detailForm.assignments}
+                    classes={classes}
+                    subjects={subjects}
+                    onAddAssignment={onAddAssignment}
+                    onRemoveAssignment={onRemoveAssignment}
+                    onAssignmentClassChange={onAssignmentClassChange}
+                    onToggleSubject={onToggleAssignmentSubject}
+                  />
+                ) : null}
 
-              <div className="flex flex-wrap gap-3 pt-2">
-                <button type="button" onClick={onSave} disabled={savingDetails} className={PRIMARY_BUTTON}>
-                  {savingDetails ? 'Saving…' : 'Save Changes'}
-                </button>
-                <button
-                  type="button"
-                  onClick={onDelete}
-                  disabled={deletingUser}
-                  className="inline-flex items-center justify-center gap-2 bg-rose-500/15 hover:bg-rose-500/25 border border-rose-400/20 text-rose-200 font-semibold px-5 py-2.5 rounded-lg transition text-sm mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {deletingUser ? 'Deleting…' : 'Delete User'}
-                </button>
+                <div className="sm:col-span-2 flex flex-wrap gap-3 pt-1">
+                  <button type="button" onClick={onSave} disabled={savingDetails} className={PRIMARY_BUTTON}>
+                    {savingDetails ? 'Saving…' : 'Save changes'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onDelete}
+                    disabled={deletingUser}
+                    className="ic-btn-danger disabled:opacity-50"
+                  >
+                    {deletingUser ? 'Deleting…' : 'Delete user'}
+                  </button>
+                </div>
               </div>
-            </div>
+            </ComposeCard>
           </div>
 
           <div className="space-y-4">
-            <div className="rounded-2xl border border-teal-500/10 bg-white/[0.02] p-5">
-              <h4 className="text-sm font-semibold text-white">Summary</h4>
-              <dl className="mt-4 space-y-3 text-sm">
+            <div className="ic-compose !mb-0">
+              <p className="ic-compose-title">Summary</p>
+              <dl className="space-y-3 text-sm">
                 <div>
                   <dt className="text-slate-500">Role</dt>
-                  <dd className="text-white capitalize">{selectedUser.role}</dd>
+                  <dd className="text-slate-800 capitalize font-semibold">{selectedUser.role}</dd>
                 </div>
                 <div>
                   <dt className="text-slate-500">Email</dt>
-                  <dd className="text-white break-all">{selectedUser.email}</dd>
+                  <dd className="text-slate-800 break-all">{selectedUser.email}</dd>
                 </div>
                 <div>
                   <dt className="text-slate-500">Created</dt>
-                  <dd className="text-white">{new Date(selectedUser.createdAt).toLocaleString()}</dd>
+                  <dd className="text-slate-800">{new Date(selectedUser.createdAt).toLocaleString()}</dd>
                 </div>
                 <div>
                   <dt className="text-slate-500">Updated</dt>
-                  <dd className="text-white">{new Date(selectedUser.updatedAt).toLocaleString()}</dd>
+                  <dd className="text-slate-800">{new Date(selectedUser.updatedAt).toLocaleString()}</dd>
                 </div>
               </dl>
             </div>
 
             {selectedUser.role === 'teacher' ? (
-              <div className="rounded-2xl border border-teal-500/10 bg-white/[0.02] p-5">
-                <h4 className="text-sm font-semibold text-white">Current assignments</h4>
-                <div className="mt-4 space-y-3">
+              <div className="ic-compose !mb-0">
+                <p className="ic-compose-title">Current assignments</p>
+                <div className="space-y-2">
                   {assignmentSummary.length === 0 ? (
-                    <p className="text-sm text-slate-400">No class assignments yet.</p>
+                    <p className="text-sm text-slate-500">No class assignments yet.</p>
                   ) : (
                     assignmentSummary.map((assignment) => (
-                      <div key={assignment.classId} className="rounded-xl border border-teal-500/10 bg-slate-950/40 p-3">
-                        <p className="text-sm font-medium text-white">{assignment.className}</p>
-                        <p className="text-xs text-slate-400 mt-1">
+                      <div key={assignment.classId} className="ic-note-chip">
+                        <p className="text-sm font-medium text-slate-800">{assignment.className}</p>
+                        <p className="text-xs text-slate-500 mt-1">
                           {assignment.subjects.map((subject) => subject.name).join(', ')}
                         </p>
                       </div>
@@ -376,26 +304,26 @@ function UserDetailModal({
             ) : null}
 
             {selectedUser.role === 'learner' ? (
-              <div className="rounded-2xl border border-teal-500/10 bg-white/[0.02] p-5">
-                <h4 className="text-sm font-semibold text-white">Current class</h4>
-                <p className="mt-3 text-sm text-slate-300">
+              <div className="ic-compose !mb-0">
+                <p className="ic-compose-title">Current class</p>
+                <p className="text-sm text-slate-600">
                   {selectedUserDetails?.class ? selectedUserDetails.class.name : 'No class assigned.'}
                 </p>
               </div>
             ) : null}
 
             {selectedUser.role === 'parent' ? (
-              <div className="rounded-2xl border border-teal-500/10 bg-white/[0.02] p-5">
-                <h4 className="text-sm font-semibold text-white">Linked learners</h4>
-                <div className="mt-4 space-y-2">
+              <div className="ic-compose !mb-0">
+                <p className="ic-compose-title">Linked learners</p>
+                <div className="space-y-2">
                   {selectedUserDetails?.learners?.length ? (
                     selectedUserDetails.learners.map((learner) => (
-                      <p key={learner.id} className="text-sm text-slate-300">
+                      <p key={learner.id} className="ic-note-chip text-sm text-slate-700">
                         {learner.firstName} {learner.lastName}
                       </p>
                     ))
                   ) : (
-                    <p className="text-sm text-slate-400">No linked learners.</p>
+                    <p className="text-sm text-slate-500">No linked learners.</p>
                   )}
                 </div>
               </div>
@@ -442,7 +370,15 @@ function buildDetailForm(selectedUser, selectedUserDetails) {
 
 export default function AdminDashboardPage() {
   const { user, signOut } = useAuthSession();
-  const [activeTab, setActiveTab] = useState('learners');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const adminTabs = tabsForRole('admin');
+  const initialTab = resolveActiveTab(searchParams.get('tab'), adminTabs);
+  const [activeTab, setActiveTab] = useState(initialTab);
+
+  function selectTab(id) {
+    setActiveTab(id);
+    setSearchParams(id === 'overview' ? {} : { tab: id }, { replace: true });
+  }
   const [users, setUsers] = useState([]);
   const [classes, setClasses] = useState([]);
   const [subjects, setSubjects] = useState([]);
@@ -813,277 +749,419 @@ export default function AdminDashboardPage() {
     });
   }
 
-  const tabs = [
-    { id: 'learners', label: 'Add Learners + Parents' },
-    { id: 'teachers', label: 'Add Teachers + Subjects' },
-    { id: 'records', label: 'View Records' },
-  ];
+  const tabTitles = {
+    overview: '',
+    learners: 'Learners',
+    teachers: 'Teachers',
+    parents: 'Parents',
+    classes: 'Classes',
+    subjects: 'Subjects',
+    records: 'User Accounts',
+  };
+  const tabSubtitles = {
+    overview: '',
+    learners: 'Create a learner account and link a parent in one step.',
+    teachers: 'Create a teacher and assign their classes and subjects.',
+    parents: 'Guardian accounts linked to learners at your school.',
+    classes: 'Active class groups on the school register.',
+    subjects: 'Curriculum subjects currently offered.',
+    records: 'Open any staff, learner, or parent card to edit or remove it.',
+  };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-blue-950 to-slate-950 text-white">
-      {/* Header */}
-      <header className="bg-slate-950/70 backdrop-blur-md border-b border-teal-500/10 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-6 py-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-teal-400/30 bg-teal-500/5 px-3 py-1 mb-3">
-              <span className="w-1.5 h-1.5 rounded-full bg-teal-400" />
-              <span className="text-[11px] font-medium text-teal-300 tracking-wide uppercase">Admin Console</span>
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
-              Welcome, {user?.firstName}
-            </h1>
-            <p className="text-slate-400 text-sm mt-1">
-              Provision staff, learners, parents, classes, and subjects
-            </p>
-          </div>
-
-          <div className="flex gap-3">
+    <DashboardShell
+      onSignOut={signOut}
+      tabs={adminTabs}
+      activeTab={activeTab}
+      onTabChange={selectTab}
+      sideTagline="Learn · Grow · Succeed"
+      toolbarLead={(
+        <span className="ic-school-pill">
+          <IconClasses size={14} />
+          IntelliClass School
+        </span>
+      )}
+    >
+      {activeTab !== 'overview' ? (
+        <PageHeader
+          kicker="School office"
+          title={tabTitles[activeTab]}
+          subtitle={tabSubtitles[activeTab]}
+          doodle={false}
+          actions={(
             <button
+              type="button"
               onClick={loadAdminData}
               disabled={loading}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-200 font-medium rounded-lg transition disabled:opacity-50 text-sm"
+              className="ic-btn-soft text-sm disabled:opacity-50 inline-flex items-center gap-2"
             >
               <RefreshIcon size={14} />
-              {loading ? 'Loading…' : 'Refresh Data'}
+              {loading ? 'Loading…' : 'Refresh'}
             </button>
-            <button
-              onClick={signOut}
-              className="px-4 py-2 bg-teal-500 hover:bg-teal-400 text-slate-950 font-semibold rounded-lg transition text-sm"
-            >
-              Sign Out
-            </button>
-          </div>
-        </div>
-      </header>
+          )}
+        />
+      ) : null}
 
-      <main className="max-w-7xl mx-auto px-6 py-10">
-        {/* Stats row — always visible, not tucked behind a tab */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
-          <StatCard icon={TeacherIcon} label="Teachers" value={counts.teachers} />
-          <StatCard icon={LearnerIcon} label="Learners" value={counts.learners} />
-          <StatCard icon={ParentIcon} label="Parents" value={counts.parents} />
-          <StatCard icon={ClassIcon} label="Classes" value={counts.classes} />
-          <StatCard icon={SubjectIcon} label="Subjects" value={counts.subjects} />
-        </div>
+      <AlertBanner tone="ok">{message}</AlertBanner>
+      <AlertBanner>{error}</AlertBanner>
 
-        {/* Tabs */}
-        <div className="inline-flex flex-wrap p-1 rounded-xl bg-slate-900/50 border border-teal-500/10 gap-1 mb-6">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-                activeTab === tab.id
-                  ? 'bg-teal-500 text-slate-950 shadow'
-                  : 'text-slate-300 hover:text-teal-300'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+      {activeTab === 'overview' ? (
+        loading ? (
+          <EmptyState>Opening the school office…</EmptyState>
+        ) : (
+          <AdminOverview
+            firstName={user?.firstName}
+            counts={counts}
+            users={users}
+            onSelectTab={selectTab}
+          />
+        )
+      ) : null}
 
-        {message ? (
-          <div className="flex items-start gap-2 rounded-lg border border-emerald-400/30 bg-emerald-500/10 text-emerald-300 text-sm px-4 py-3 mb-4">
-            <span aria-hidden="true">✓</span>
-            <span>{message}</span>
-          </div>
-        ) : null}
-
-        {error ? (
-          <div className="flex items-start gap-2 rounded-lg border border-red-400/30 bg-red-500/10 text-red-300 text-sm px-4 py-3 mb-4">
-            <span aria-hidden="true">⚠</span>
-            <span>{error}</span>
-          </div>
-        ) : null}
-
-        <section>
           {activeTab === 'learners' ? (
-            <AdminSectionCard title="Add Learner and Link Parent" className="section-card--wide">
-              <form className="flex flex-col gap-5" onSubmit={handleProvisionLearnerFamily}>
-                <h3 className={SECTION_HEADING}>Learner Details</h3>
-                <div className={FIELD_GRID}>
-                  <label className={LABEL_CLASSES}>
-                    First name
-                    <input
-                      className={INPUT_CLASSES}
-                      value={learnerForm.learnerFirstName}
-                      onChange={(event) => handleLearnerFieldChange('learnerFirstName', event.target.value)}
+            <FormPage
+              kicker="Learners"
+              title="Add Learner"
+              subtitle="Create a learner account and link a parent in one step."
+              doodleCaption="Every learner deserves a strong start"
+              aside={(
+                <>
+                  <FormHelpCard
+                    items={[
+                      'Fields marked with * are required.',
+                      'A secure password is generated and emailed automatically.',
+                      'Use an existing parent email to link another child.',
+                      'Choose the class the learner will join.',
+                    ]}
+                  />
+                  <FormStatCard
+                    label="Total Learners"
+                    value={counts.learners}
+                    hint={`${counts.parents} parents on the register`}
+                  />
+                </>
+              )}
+            >
+              <FormCard onSubmit={handleProvisionLearnerFamily}>
+                <FormStep step={1} title="Learner information">
+                  <FormGrid>
+                    <FormField label="First name" required icon={FieldIcon.person}>
+                      <input
+                        value={learnerForm.learnerFirstName}
+                        onChange={(event) => handleLearnerFieldChange('learnerFirstName', event.target.value)}
+                        placeholder="e.g. Alicia"
+                        required
+                      />
+                    </FormField>
+                    <FormField label="Last name" required icon={FieldIcon.person}>
+                      <input
+                        value={learnerForm.learnerLastName}
+                        onChange={(event) => handleLearnerFieldChange('learnerLastName', event.target.value)}
+                        placeholder="e.g. Tau"
+                        required
+                      />
+                    </FormField>
+                    <FormField label="Learner email" required icon={FieldIcon.mail} className="fk-span-2">
+                      <input
+                        type="email"
+                        value={learnerForm.learnerEmail}
+                        onChange={(event) => handleLearnerFieldChange('learnerEmail', event.target.value)}
+                        placeholder="learner@school.com"
+                        required
+                      />
+                    </FormField>
+                    <FormField
+                      label="Password"
+                      icon={FieldIcon.lock}
+                      className="fk-span-2"
+                      hint="Auto-generated and emailed when the account is created."
+                    >
+                      <input value="Auto-generated & emailed" readOnly />
+                    </FormField>
+                    <FormPreviewCard className="fk-span-2" title="Learner account">
+                      Login details will be emailed to the learner after you save.
+                    </FormPreviewCard>
+                  </FormGrid>
+                </FormStep>
+
+                <FormStep step={2} title="Assign class">
+                  <FormField label="Select class" required icon={FieldIcon.school}>
+                    <select
+                      value={learnerForm.classId}
+                      onChange={(event) => handleLearnerFieldChange('classId', event.target.value)}
                       required
-                    />
-                  </label>
-                  <label className={LABEL_CLASSES}>
-                    Last name
-                    <input
-                      className={INPUT_CLASSES}
-                      value={learnerForm.learnerLastName}
-                      onChange={(event) => handleLearnerFieldChange('learnerLastName', event.target.value)}
-                      required
-                    />
-                  </label>
-                </div>
+                    >
+                      <option value="">Choose a class</option>
+                      {classes.map((classItem) => (
+                        <option key={classItem.id} value={classItem.id}>
+                          {classItem.name}
+                        </option>
+                      ))}
+                    </select>
+                  </FormField>
+                </FormStep>
 
-                <div className={FIELD_GRID}>
-                  <label className={LABEL_CLASSES}>
-                    Learner email
-                    <input
-                      type="email"
-                      className={INPUT_CLASSES}
-                      value={learnerForm.learnerEmail}
-                      onChange={(event) => handleLearnerFieldChange('learnerEmail', event.target.value)}
-                      required
-                    />
-                  </label>
-                </div>
+                <FormStep step={3} title="Link parent">
+                  <FormGrid>
+                    <FormField label="Parent first name" icon={FieldIcon.person}>
+                      <input
+                        value={learnerForm.parentFirstName}
+                        onChange={(event) => handleLearnerFieldChange('parentFirstName', event.target.value)}
+                        placeholder="Optional if parent exists"
+                      />
+                    </FormField>
+                    <FormField label="Parent last name" icon={FieldIcon.person}>
+                      <input
+                        value={learnerForm.parentLastName}
+                        onChange={(event) => handleLearnerFieldChange('parentLastName', event.target.value)}
+                        placeholder="Optional if parent exists"
+                      />
+                    </FormField>
+                    <FormField label="Parent email" required icon={FieldIcon.mail} className="fk-span-2">
+                      <input
+                        type="email"
+                        value={learnerForm.parentEmail}
+                        onChange={(event) => handleLearnerFieldChange('parentEmail', event.target.value)}
+                        placeholder="parent@email.com"
+                        required
+                      />
+                    </FormField>
+                  </FormGrid>
+                </FormStep>
 
-                <p className="text-xs text-slate-400 bg-teal-500/5 border border-teal-500/10 rounded-lg px-3 py-2">
-                  A default password is generated automatically and emailed after the account is created.
-                </p>
-
-                <label className={LABEL_CLASSES}>
-                  Class
-                  <select
-                    className={INPUT_CLASSES}
-                    value={learnerForm.classId}
-                    onChange={(event) => handleLearnerFieldChange('classId', event.target.value)}
-                    required
-                  >
-                    <option value="">Select class</option>
-                    {classes.map((classItem) => (
-                      <option key={classItem.id} value={classItem.id}>
-                        {classItem.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <h3 className={SECTION_HEADING}>Parent Details</h3>
-                <p className="text-xs text-slate-400 bg-teal-500/5 border border-teal-500/10 rounded-lg px-3 py-2">
-                  If the parent already exists, enter the same email and leave name/password blank.
-                  This lets one parent be linked to multiple children.
-                </p>
-
-                <div className={FIELD_GRID}>
-                  <label className={LABEL_CLASSES}>
-                    Parent first name
-                    <input
-                      className={INPUT_CLASSES}
-                      value={learnerForm.parentFirstName}
-                      onChange={(event) => handleLearnerFieldChange('parentFirstName', event.target.value)}
-                    />
-                  </label>
-                  <label className={LABEL_CLASSES}>
-                    Parent last name
-                    <input
-                      className={INPUT_CLASSES}
-                      value={learnerForm.parentLastName}
-                      onChange={(event) => handleLearnerFieldChange('parentLastName', event.target.value)}
-                    />
-                  </label>
-                </div>
-
-                <div className={FIELD_GRID}>
-                  <label className={LABEL_CLASSES}>
-                    Parent email
-                    <input
-                      type="email"
-                      className={INPUT_CLASSES}
-                      value={learnerForm.parentEmail}
-                      onChange={(event) => handleLearnerFieldChange('parentEmail', event.target.value)}
-                      required
-                    />
-                  </label>
-                </div>
-
-                <button type="submit" disabled={saving.learnerFamily} className={PRIMARY_BUTTON}>
-                  {saving.learnerFamily ? 'Saving…' : 'Add Learner and Link Parent'}
-                </button>
-              </form>
-            </AdminSectionCard>
+                <FormActions>
+                  <FormCancelButton
+                    onClick={() => setLearnerForm({
+                      learnerFirstName: '',
+                      learnerLastName: '',
+                      learnerEmail: '',
+                      classId: '',
+                      parentFirstName: '',
+                      parentLastName: '',
+                      parentEmail: '',
+                    })}
+                  />
+                  <FormSubmitButton disabled={saving.learnerFamily} busyLabel="Saving…">
+                    Create learner
+                  </FormSubmitButton>
+                </FormActions>
+              </FormCard>
+            </FormPage>
           ) : null}
 
           {activeTab === 'teachers' ? (
-            <AdminSectionCard title="Add Teacher and Assign Subjects" className="section-card--wide">
-              <form className="flex flex-col gap-5" onSubmit={handleProvisionTeacherAssignment}>
-                <div className={FIELD_GRID}>
-                  <label className={LABEL_CLASSES}>
-                    First name
-                    <input
-                      className={INPUT_CLASSES}
-                      value={teacherForm.teacherFirstName}
-                      onChange={(event) => handleTeacherFieldChange('teacherFirstName', event.target.value)}
-                      required
-                    />
-                  </label>
-                  <label className={LABEL_CLASSES}>
-                    Last name
-                    <input
-                      className={INPUT_CLASSES}
-                      value={teacherForm.teacherLastName}
-                      onChange={(event) => handleTeacherFieldChange('teacherLastName', event.target.value)}
-                      required
-                    />
-                  </label>
+            <FormPage
+              kicker="Teachers"
+              title="Add Teacher"
+              subtitle="Create a teacher account and assign their classes and subjects."
+              doodleCaption="Great teachers build great futures"
+              aside={(
+                <>
+                  <FormHelpCard
+                    items={[
+                      'All fields marked with * are required.',
+                      'A secure password is generated and emailed automatically.',
+                      'Add one class block per teaching group.',
+                      'Select the subjects taught in each class.',
+                    ]}
+                  />
+                  <FormStatCard
+                    label="Total Teachers"
+                    value={counts.teachers}
+                    hint="Staff currently on the register"
+                  />
+                </>
+              )}
+            >
+              <FormCard onSubmit={handleProvisionTeacherAssignment}>
+                <FormStep step={1} title="Personal information">
+                  <FormGrid>
+                    <FormField label="First name" required icon={FieldIcon.person}>
+                      <input
+                        value={teacherForm.teacherFirstName}
+                        onChange={(event) => handleTeacherFieldChange('teacherFirstName', event.target.value)}
+                        placeholder="e.g. Thabo"
+                        required
+                      />
+                    </FormField>
+                    <FormField label="Last name" required icon={FieldIcon.person}>
+                      <input
+                        value={teacherForm.teacherLastName}
+                        onChange={(event) => handleTeacherFieldChange('teacherLastName', event.target.value)}
+                        placeholder="e.g. Molefe"
+                        required
+                      />
+                    </FormField>
+                    <FormField label="Email address" required icon={FieldIcon.mail} className="fk-span-2">
+                      <input
+                        type="email"
+                        value={teacherForm.teacherEmail}
+                        onChange={(event) => handleTeacherFieldChange('teacherEmail', event.target.value)}
+                        placeholder="teacher@school.com"
+                        required
+                      />
+                    </FormField>
+                    <FormField
+                      label="Password"
+                      icon={FieldIcon.lock}
+                      className="fk-span-2"
+                      hint="Auto-generated and emailed when the account is created."
+                    >
+                      <input value="Auto-generated & emailed" readOnly />
+                    </FormField>
+                    <FormPreviewCard className="fk-span-2" title="Teacher account">
+                      Login details will be emailed to the teacher after you save.
+                    </FormPreviewCard>
+                  </FormGrid>
+                </FormStep>
+
+                <FormStep step={2} title="Assign classes & subjects">
+                  <AssignmentBlocksEditor
+                    title="Teaching assignments"
+                    assignments={teacherForm.assignments}
+                    classes={classes}
+                    subjects={subjects}
+                    onAddAssignment={addTeacherAssignmentBlock}
+                    onRemoveAssignment={removeTeacherAssignmentBlock}
+                    onAssignmentClassChange={handleTeacherAssignmentChange}
+                    onToggleSubject={handleTeacherAssignmentToggleSubject}
+                  />
+                </FormStep>
+
+                <FormActions>
+                  <FormCancelButton
+                    onClick={() => setTeacherForm({
+                      teacherFirstName: '',
+                      teacherLastName: '',
+                      teacherEmail: '',
+                      assignments: [createTeacherAssignmentBlock()],
+                    })}
+                  />
+                  <FormSubmitButton disabled={saving.teacherAssignment} busyLabel="Saving…">
+                    Create teacher
+                  </FormSubmitButton>
+                </FormActions>
+              </FormCard>
+            </FormPage>
+          ) : null}
+
+          {activeTab === 'parents' ? (
+            <Panel
+              title="Parents"
+              subtitle="Guardian accounts on the school register."
+              icon={IconLearners}
+              tone="purple"
+            >
+              {parents.length === 0 ? (
+                <EmptyState>No parents yet. They are created when you add a learner.</EmptyState>
+              ) : (
+                <div className="space-y-3">
+                  {parents.map((parent) => (
+                    <RowCard
+                      key={parent.id}
+                      as="button"
+                      type="button"
+                      icon={IconLearners}
+                      tone="purple"
+                      onClick={() => openUserDetails(parent)}
+                    >
+                      <div className="ic-list-body">
+                        <h3 className="ic-list-title">{parent.firstName} {parent.lastName}</h3>
+                        <p className="ic-list-meta">{parent.email}</p>
+                      </div>
+                      <div className="ic-list-actions">
+                        <span className="ic-btn-soft">Open</span>
+                      </div>
+                    </RowCard>
+                  ))}
                 </div>
+              )}
+            </Panel>
+          ) : null}
 
-                <div className={FIELD_GRID}>
-                  <label className={LABEL_CLASSES}>
-                    Teacher email
-                    <input
-                      type="email"
-                      className={INPUT_CLASSES}
-                      value={teacherForm.teacherEmail}
-                      onChange={(event) => handleTeacherFieldChange('teacherEmail', event.target.value)}
-                      required
-                    />
-                  </label>
+          {activeTab === 'classes' ? (
+            <Panel
+              title="Classes"
+              subtitle="Class groups used when enrolling learners and assigning teachers."
+              icon={IconClasses}
+              tone="purple"
+            >
+              {classes.length === 0 ? (
+                <EmptyState>No classes found.</EmptyState>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {classes.map((classItem) => (
+                    <RowCard key={classItem.id} icon={IconClasses} tone="purple">
+                      <div className="ic-list-body">
+                        <h3 className="ic-list-title">{classItem.name}</h3>
+                        <p className="ic-list-meta">
+                          {[classItem.gradeLevel || classItem.grade_level, classItem.academicYear || classItem.academic_year]
+                            .filter(Boolean)
+                            .join(' · ') || 'Active class group'}
+                        </p>
+                      </div>
+                      <div className="ic-list-actions">
+                        <StatusPill tone="ok">Active</StatusPill>
+                      </div>
+                    </RowCard>
+                  ))}
                 </div>
+              )}
+            </Panel>
+          ) : null}
 
-                <p className="text-xs text-slate-400 bg-teal-500/5 border border-teal-500/10 rounded-lg px-3 py-2">
-                  A default password is generated automatically and emailed after the account is created.
-                </p>
-
-                <AssignmentBlocksEditor
-                  title="Class assignments"
-                  assignments={teacherForm.assignments}
-                  classes={classes}
-                  subjects={subjects}
-                  onAddAssignment={addTeacherAssignmentBlock}
-                  onRemoveAssignment={removeTeacherAssignmentBlock}
-                  onAssignmentClassChange={handleTeacherAssignmentChange}
-                  onToggleSubject={handleTeacherAssignmentToggleSubject}
-                />
-
-                <button type="submit" disabled={saving.teacherAssignment} className={PRIMARY_BUTTON}>
-                  {saving.teacherAssignment ? 'Saving…' : 'Add Teacher and Assign Subjects'}
-                </button>
-              </form>
-            </AdminSectionCard>
+          {activeTab === 'subjects' ? (
+            <Panel
+              title="Subjects"
+              subtitle="Curriculum subjects available for teacher assignments."
+              icon={IconSubjects}
+              tone="orange"
+            >
+              {subjects.length === 0 ? (
+                <EmptyState>No subjects found.</EmptyState>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {subjects.map((subject) => (
+                    <RowCard key={subject.id} icon={IconSubjects} tone="orange">
+                      <div className="ic-list-body">
+                        <h3 className="ic-list-title">{subject.name}</h3>
+                        <p className="ic-list-meta">{subject.code || 'Curriculum subject'}</p>
+                      </div>
+                      <div className="ic-list-actions">
+                        <StatusPill tone="orange">Offered</StatusPill>
+                      </div>
+                    </RowCard>
+                  ))}
+                </div>
+              )}
+            </Panel>
           ) : null}
 
           {activeTab === 'records' ? (
-            <AdminSectionCard title="Current Records" className="section-card--wide">
+            <Panel
+              title="User Accounts"
+              subtitle="Open any staff, learner, or parent card to edit or remove it."
+              icon={IconRecords}
+              tone="purple"
+            >
               <AdminSummaryChips counts={counts} />
               <AdminRecordsPanel teachers={teachers} learners={learners} parents={parents} onSelectUser={openUserDetails} />
-            </AdminSectionCard>
+            </Panel>
           ) : null}
-        </section>
-      </main>
 
       {selectedUser ? (
         selectedUserLoading ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm px-4">
-            <div className="rounded-2xl border border-teal-500/15 bg-slate-950 px-6 py-5 text-slate-200 shadow-2xl">
-              Loading user details...
+          <div className="ic-modal-backdrop flex items-center justify-center">
+            <div className="ic-modal max-w-md text-slate-700">
+              Opening the register card…
             </div>
           </div>
         ) : selectedUserError ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm px-4">
-            <div className="w-full max-w-lg rounded-2xl border border-red-400/20 bg-slate-950 px-6 py-5 text-red-200 shadow-2xl">
+          <div className="ic-modal-backdrop flex items-center justify-center">
+            <div className="ic-modal max-w-lg">
               <div className="flex items-start justify-between gap-4">
-                <p>{selectedUserError}</p>
-                <button type="button" onClick={closeUserDetails} className="text-red-200 hover:text-white">
+                <p className="text-rose-800">{selectedUserError}</p>
+                <button type="button" onClick={closeUserDetails} className="ic-btn-ghost text-sm">
                   Close
                 </button>
               </div>
@@ -1109,6 +1187,6 @@ export default function AdminDashboardPage() {
           />
         )
       ) : null}
-    </div>
+    </DashboardShell>
   );
 }

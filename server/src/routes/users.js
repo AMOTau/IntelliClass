@@ -15,6 +15,7 @@ function buildPublicUser(user) {
     firstName: user.first_name,
     lastName: user.last_name,
     email: user.email,
+    phone: user.phone || '',
     createdAt: user.created_at,
     updatedAt: user.updated_at,
   };
@@ -600,7 +601,7 @@ usersRouter.post('/provision-teacher-assignment', requireAuth, requireRole('admi
 usersRouter.get('/profile', requireAuth, async (req, res, next) => {
   try {
     const result = await pool.query(
-      `SELECT id, role, first_name, last_name, email, created_at, updated_at
+      `SELECT id, role, first_name, last_name, email, phone, created_at, updated_at
        FROM users
        WHERE id = $1`,
       [req.user.sub]
@@ -618,10 +619,10 @@ usersRouter.get('/profile', requireAuth, async (req, res, next) => {
 
 usersRouter.put('/profile', requireAuth, async (req, res, next) => {
   try {
-    const { firstName, lastName } = req.body;
+    const { firstName, lastName, phone } = req.body;
 
-    if (!firstName && !lastName) {
-      return res.status(400).json({ message: 'Provide firstName or lastName to update the profile.' });
+    if (!firstName && !lastName && phone === undefined) {
+      return res.status(400).json({ message: 'Provide firstName, lastName or phone to update the profile.' });
     }
 
     const fields = [];
@@ -638,6 +639,11 @@ usersRouter.put('/profile', requireAuth, async (req, res, next) => {
       values.push(lastName.trim());
     }
 
+    if (phone !== undefined) {
+      fields.push(`phone = $${index++}`);
+      values.push(String(phone || '').trim() || null);
+    }
+
     fields.push(`updated_at = now()`);
     values.push(req.user.sub);
 
@@ -645,7 +651,7 @@ usersRouter.put('/profile', requireAuth, async (req, res, next) => {
       `UPDATE users
        SET ${fields.join(', ')}
        WHERE id = $${index}
-       RETURNING id, role, first_name, last_name, email, created_at, updated_at`,
+       RETURNING id, role, first_name, last_name, email, phone, created_at, updated_at`,
       values
     );
 

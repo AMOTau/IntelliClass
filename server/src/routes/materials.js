@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { pool } from '../config/db.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { extractPdfText } from '../utils/pdfText.js';
+import { buildChapters, getMaterialChapters, summarizeChapters } from '../services/quizAi/knowledgeBase.js';
 
 export const materialsRouter = Router();
 
@@ -185,7 +186,10 @@ materialsRouter.post('/upload', requireAuth, requireRole('teacher', 'admin'), ha
       ]
     );
 
-    return res.status(201).json({ material: buildMaterialRow(insertResult.rows[0], { includeText: true }) });
+    return res.status(201).json({
+      material: buildMaterialRow(insertResult.rows[0], { includeText: true }),
+      chapters: summarizeChapters(buildChapters(extractedText)),
+    });
   } catch (error) {
     if (req.file?.path) {
       try {
@@ -220,6 +224,16 @@ materialsRouter.get('/', requireAuth, async (req, res, next) => {
     }
 
     return res.json({ materials: queryResult.rows.map((row) => buildMaterialRow(row)) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+materialsRouter.get('/:id/chapters', requireAuth, requireRole('teacher', 'admin'), async (req, res, next) => {
+  try {
+    const material = await loadMaterialForUser(req.params.id, req.user);
+    const chapters = await getMaterialChapters(material);
+    return res.json({ materialId: material.id, title: material.title, chapters: summarizeChapters(chapters) });
   } catch (error) {
     return next(error);
   }

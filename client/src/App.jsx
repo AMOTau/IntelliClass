@@ -10,6 +10,7 @@ import LearnerDashboardPage from './pages/LearnerDashboardPage';
 import ParentDashboardPage from './pages/ParentDashboardPage';
 import ProfilePage from './pages/ProfilePage';
 import QuizPage from './pages/QuizPage';
+import ReportPage from './pages/ReportPage';
 
 function RedirectFromUnknownRoute() {
   const { user } = useAuthSession();
@@ -76,6 +77,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <QuizPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/reports/:reportId"
+          element={
+            <ProtectedRoute>
+              <ReportPage />
             </ProtectedRoute>
           }
         />

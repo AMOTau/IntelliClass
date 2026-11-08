@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { env } from './config/env.js';
 import { pool } from './config/db.js';
+import { activeProvider, activeProviderId } from './services/quizAi/llmClient.js';
 
 const schemaPath = fileURLToPath(new URL('../db/schema.sql', import.meta.url));
 
@@ -89,6 +90,13 @@ async function startServer() {
 
     app.listen(env.port, () => {
       console.log(`IntelliClass API running on http://localhost:${env.port}`);
+      const provider = activeProvider();
+      const token = provider.token() || '';
+      if (!token) {
+        console.warn(`AI provider "${activeProviderId()}" has no API key — quiz generation will use the offline notes fallback. Set GEMINI_API_KEY (recommended, free) at https://aistudio.google.com/apikey.`);
+      } else {
+        console.log(`AI provider: ${provider.name} (…${token.slice(-4)})`);
+      }
     });
   } catch (error) {
     console.error('Failed to connect to PostgreSQL or start the server.');
@@ -98,3 +106,5 @@ async function startServer() {
 }
 
 startServer();
+
+

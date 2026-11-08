@@ -7,9 +7,12 @@ CREATE TABLE IF NOT EXISTS users (
   last_name text NOT NULL,
   email text NOT NULL UNIQUE,
   password_hash text NOT NULL,
+  phone text,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS phone text;
 
 CREATE TABLE IF NOT EXISTS classes (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -81,9 +84,32 @@ CREATE TABLE IF NOT EXISTS quizzes (
   subject_id uuid REFERENCES subjects(id) ON DELETE SET NULL,
   title text NOT NULL,
   status text NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published', 'archived')),
+  learner_template text NOT NULL DEFAULT 'classic'
+    CHECK (learner_template IN ('classic', 'drag_drop', 'tap_match', 'adventure')),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+
+ALTER TABLE quizzes
+  ADD COLUMN IF NOT EXISTS learner_template text DEFAULT 'classic';
+
+UPDATE quizzes
+SET learner_template = 'classic'
+WHERE learner_template IS NULL;
+
+ALTER TABLE quizzes
+  ALTER COLUMN learner_template SET DEFAULT 'classic';
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'quizzes_learner_template_check'
+  ) THEN
+    ALTER TABLE quizzes
+      ADD CONSTRAINT quizzes_learner_template_check
+      CHECK (learner_template IN ('classic', 'drag_drop', 'tap_match', 'adventure'));
+  END IF;
+END $$;
 
 ALTER TABLE quizzes
   ADD COLUMN IF NOT EXISTS class_id uuid;
@@ -165,6 +191,22 @@ ALTER TABLE questions ADD COLUMN IF NOT EXISTS explanation text;
 ALTER TABLE questions ADD COLUMN IF NOT EXISTS difficulty text;
 ALTER TABLE questions ADD COLUMN IF NOT EXISTS topic text;
 
+ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS source_scope jsonb;
+ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS difficulty_mix text;
+ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS due_date date;
+
+CREATE TABLE IF NOT EXISTS quiz_ai_messages (
+  id bigserial PRIMARY KEY,
+  quiz_id uuid NOT NULL REFERENCES quizzes(id) ON DELETE CASCADE,
+  teacher_id uuid REFERENCES users(id) ON DELETE SET NULL,
+  role text NOT NULL CHECK (role IN ('teacher', 'assistant', 'system_note')),
+  content text NOT NULL,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_quiz_ai_messages_quiz_id ON quiz_ai_messages (quiz_id, id);
+
 CREATE TABLE IF NOT EXISTS homework (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   teacher_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -172,10 +214,16 @@ CREATE TABLE IF NOT EXISTS homework (
   description text,
   subject text,
   class_name text,
+  class_id uuid REFERENCES classes(id) ON DELETE SET NULL,
+  subject_id uuid REFERENCES subjects(id) ON DELETE SET NULL,
   due_date date,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+
+ALTER TABLE homework ADD COLUMN IF NOT EXISTS class_id uuid REFERENCES classes(id) ON DELETE SET NULL;
+ALTER TABLE homework ADD COLUMN IF NOT EXISTS subject_id uuid REFERENCES subjects(id) ON DELETE SET NULL;
+ALTER TABLE homework ADD COLUMN IF NOT EXISTS max_score numeric(5, 2) NOT NULL DEFAULT 10;
 
 CREATE TABLE IF NOT EXISTS submissions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -190,6 +238,10 @@ CREATE TABLE IF NOT EXISTS submissions (
   updated_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (homework_id, learner_id)
 );
+
+-- Teacher marking: score is out of the parent homework's max_score.
+ALTER TABLE submissions ADD COLUMN IF NOT EXISTS graded_at timestamptz;
+ALTER TABLE submissions ADD COLUMN IF NOT EXISTS graded_by uuid REFERENCES users(id) ON DELETE SET NULL;
 
 CREATE TABLE IF NOT EXISTS quiz_submissions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -236,6 +288,51 @@ CREATE TABLE IF NOT EXISTS quiz_explanations (
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (quiz_id, question_id, learner_id)
 );
+
+-- Parents clear their notification bell; anything newer than this is unread.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS notifications_seen_at timestamptz;
+
+-- A report is a frozen snapshot of a learner's results over a date range, so
+-- later marks never change a report the parent has already seen.
+CREATE TABLE IF NOT EXISTS reports (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  learner_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  class_id uuid REFERENCES classes(id) ON DELETE SET NULL,
+  created_by uuid REFERENCES users(id) ON DELETE SET NULL,
+  title text NOT NULL,
+  period_label text,
+  period_start date NOT NULL,
+  period_end date NOT NULL,
+  summary jsonb NOT NULL DEFAULT '{}'::jsonb,
+  comment text,
+  published_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (learner_id, period_start, period_end)
+);
+
+CREATE INDEX IF NOT EXISTS idx_reports_learner_id ON reports (learner_id, published_at);
+
+-- Teacher-to-parent notes. One row per parent, so two guardians each get their own alert.
+CREATE TABLE IF NOT EXISTS parent_messages (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  teacher_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  parent_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  learner_id uuid REFERENCES users(id) ON DELETE SET NULL,
+  class_id uuid REFERENCES classes(id) ON DELETE SET NULL,
+  title text NOT NULL,
+  body text NOT NULL,
+  parent_reply text,
+  parent_replied_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE parent_messages ADD COLUMN IF NOT EXISTS parent_reply text;
+ALTER TABLE parent_messages ADD COLUMN IF NOT EXISTS parent_replied_at timestamptz;
+
+CREATE INDEX IF NOT EXISTS idx_parent_messages_parent_id ON parent_messages (parent_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_parent_messages_teacher_id ON parent_messages (teacher_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_submissions_graded_at ON submissions (graded_at);
 
 CREATE INDEX IF NOT EXISTS idx_materials_teacher_id ON materials (teacher_id);
 CREATE INDEX IF NOT EXISTS idx_materials_class_id ON materials (class_id);

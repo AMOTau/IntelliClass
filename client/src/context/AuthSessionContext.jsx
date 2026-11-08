@@ -14,6 +14,7 @@ export function AuthSessionProvider({ children }) {
   }, [token]);
 
   const signIn = useCallback((nextToken, nextUser) => {
+    setAuthToken(nextToken);
     setToken(nextToken);
     setUser(nextUser);
     storeSession(nextToken, nextUser);

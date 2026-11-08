@@ -1,16 +1,43 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import DashboardShell, {
+  AlertBanner,
+  EmptyState,
+  PageHeader,
+  Panel,
+  QuickStart,
+  RowCard,
+  StatGrid,
+  StatusPill,
+} from '../components/ui/DashboardShell';
+import {
+  IconClasses,
+  IconHomework,
+  IconMaterials,
+  IconQuizzes,
+} from '../components/ui/DashIcons';
 import { useAuthSession } from '../context/AuthSessionContext';
 import { api } from '../lib/api';
+import { resolveActiveTab, tabsForRole } from '../utils/dashNav';
+import { formatDueDate } from '../utils/dates';
 import { parseApiError } from '../utils/errors';
+import { FEATURES } from '../utils/featureFlags';
 
 const fileOrigin = (import.meta.env.VITE_API_URL ?? 'http://localhost:4000/api').replace(/\/api\/?$/, '');
+
+function isHomeworkDone(homework) {
+  return homework.submission_status === 'submitted' || homework.submission_status === 'late';
+}
 
 export default function LearnerDashboardPage() {
   const { user, signOut } = useAuthSession();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const learnerTabs = tabsForRole('learner');
+  const initialTab = resolveActiveTab(searchParams.get('tab'), learnerTabs);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [dashData, setDashData] = useState({
     classes: [],
     assignedHomework: [],
@@ -22,9 +49,24 @@ export default function LearnerDashboardPage() {
     },
   });
 
+  function selectTab(id) {
+    setActiveTab(id);
+    setSearchParams(id === 'overview' ? {} : { tab: id }, { replace: true });
+  }
+
   useEffect(() => {
     loadLearnerData();
   }, []);
+
+  async function markHomeworkComplete(homeworkId) {
+    setError('');
+    try {
+      await api.post(`/homework/${homeworkId}/complete`);
+      await loadLearnerData();
+    } catch (requestError) {
+      setError(parseApiError(requestError, 'Failed to mark homework complete.'));
+    }
+  }
 
   async function loadLearnerData() {
     setLoading(true);
@@ -43,104 +85,270 @@ export default function LearnerDashboardPage() {
     }
   }
 
-  const pendingHomework = dashData.assignedHomework.filter((hw) => hw.due_date && new Date(hw.due_date) > new Date());
-  const overdueHomework = dashData.assignedHomework.filter((hw) => hw.due_date && new Date(hw.due_date) <= new Date());
+  const completedHomework = dashData.assignedHomework.filter(isHomeworkDone);
+  const openHomework = dashData.assignedHomework.filter((hw) => !isHomeworkDone(hw));
+  const pendingHomework = openHomework.filter((hw) => {
+    const match = String(hw.due_date || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!match) {
+      return true;
+    }
+    const due = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return due >= today;
+  });
+  const overdueHomework = openHomework.filter((hw) => !pendingHomework.includes(hw) && hw.due_date);
+
+  const titles = {
+    overview: `Welcome, ${user?.firstName}!`,
+    homework: 'Homework',
+    quizzes: 'Quizzes',
+    materials: 'Study materials',
+  };
+  const subtitles = {
+    overview: FEATURES.homework
+      ? "Here's a quick look at your homework, quizzes, and notes for today."
+      : "Here's a quick look at your quizzes and study notes for today.",
+    homework: 'What is due, what you have handed in, and your mark when it is ready.',
+    quizzes: 'Take a quiz or open a result you have already written.',
+    materials: 'PDFs your teacher has shared with the class.',
+  };
+
+  const finishedQuizzes = dashData.availableQuizzes.filter((quiz) => quiz.score != null).length;
+  const openQuizzes = dashData.availableQuizzes.length - finishedQuizzes;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-blue-950 to-slate-950">
-      <header className="bg-gradient-to-r from-slate-950 to-blue-950 border-b border-teal-500/20 text-white shadow-xl">
-        <div className="max-w-7xl mx-auto px-6 py-8 flex justify-between items-center">
-          <div>
-            <p className="text-teal-400 text-sm font-semibold mb-2">IntelliClass</p>
-            <h1 className="text-4xl font-bold">Welcome, {user?.firstName}</h1>
-            <p className="text-gray-400 mt-2">Your notes, quizzes, and results in one place.</p>
-          </div>
-          <button onClick={signOut} className="px-6 py-2 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-lg">
-            Sign Out
-          </button>
-        </div>
-      </header>
-
-      {error ? (
-        <div className="max-w-7xl mx-auto px-6 py-4 mt-4">
-          <div className="bg-red-500/20 border border-red-500/50 text-red-200 px-4 py-3 rounded-lg">{error}</div>
-        </div>
-      ) : null}
+    <DashboardShell
+      variant="learner"
+      onSignOut={signOut}
+      tabs={learnerTabs}
+      activeTab={activeTab}
+      onTabChange={selectTab}
+    >
+      <PageHeader
+        kicker={activeTab === 'overview' ? 'Learner dashboard' : 'Learner desk'}
+        title={titles[activeTab]}
+        subtitle={subtitles[activeTab]}
+        doodle={activeTab === 'overview'}
+      />
+      <AlertBanner>{error}</AlertBanner>
 
       {loading ? (
-        <div className="flex items-center justify-center min-h-[50vh] text-white text-2xl">Loading...</div>
+        <EmptyState>Opening your desk…</EmptyState>
       ) : (
-        <main className="max-w-7xl mx-auto px-6 py-12 space-y-12">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            {[
-              ['Classes', dashData.classes.length, 'text-teal-400'],
-              ['Pending homework', pendingHomework.length, 'text-teal-400'],
-              ['Overdue', overdueHomework.length, 'text-red-400'],
-              ['Completed', dashData.submissionStats.completed, 'text-teal-400'],
-            ].map(([label, value, color]) => (
-              <div key={label} className="bg-slate-900/50 border border-teal-500/30 rounded-lg p-6">
-                <p className="text-gray-400 text-sm font-semibold uppercase">{label}</p>
-                <p className={`text-4xl font-bold mt-2 ${color}`}>{value}</p>
-              </div>
-            ))}
-          </div>
-
-          {overdueHomework.length > 0 ? (
-            <div className="bg-red-500/20 border border-red-500/50 text-red-200 p-6 rounded-lg">
-              <h3 className="font-bold text-lg mb-2">Overdue homework</h3>
-              {overdueHomework.map((hw) => (
-                <p key={hw.id} className="text-sm">{hw.title} — due {new Date(hw.due_date).toLocaleDateString()}</p>
-              ))}
-            </div>
+        <>
+          {activeTab === 'overview' ? (
+            <>
+              <StatGrid
+                items={FEATURES.homework
+                  ? [
+                      {
+                        label: 'Classes',
+                        value: dashData.classes.length,
+                        hint: 'Your enrolled classes',
+                        icon: IconClasses,
+                        tone: 'teal',
+                        onClick: () => selectTab('materials'),
+                      },
+                      {
+                        label: 'Pending',
+                        value: pendingHomework.length,
+                        hint: 'Homework still to hand in',
+                        icon: IconHomework,
+                        tone: 'blue',
+                        onClick: () => selectTab('homework'),
+                      },
+                      {
+                        label: 'Overdue',
+                        value: overdueHomework.length,
+                        hint: 'Past the due date — catch up kindly',
+                        icon: IconHomework,
+                        tone: 'orange',
+                        onClick: () => selectTab('homework'),
+                      },
+                      {
+                        label: 'Completed',
+                        value: completedHomework.length,
+                        hint: 'Work you have already handed in',
+                        icon: IconQuizzes,
+                        tone: 'purple',
+                        onClick: () => selectTab('homework'),
+                      },
+                    ]
+                  : [
+                      {
+                        label: 'Classes',
+                        value: dashData.classes.length,
+                        hint: 'Your enrolled classes',
+                        icon: IconClasses,
+                        tone: 'teal',
+                        onClick: () => selectTab('materials'),
+                      },
+                      {
+                        label: 'Quizzes open',
+                        value: openQuizzes,
+                        hint: 'Still to take',
+                        icon: IconQuizzes,
+                        tone: 'blue',
+                        onClick: () => selectTab('quizzes'),
+                      },
+                      {
+                        label: 'Finished',
+                        value: finishedQuizzes,
+                        hint: 'Quizzes you have already written',
+                        icon: IconQuizzes,
+                        tone: 'purple',
+                        onClick: () => selectTab('quizzes'),
+                      },
+                      {
+                        label: 'Study notes',
+                        value: dashData.studyMaterials.length,
+                        hint: 'PDFs shared with your class',
+                        icon: IconMaterials,
+                        tone: 'orange',
+                        onClick: () => selectTab('materials'),
+                      },
+                    ]}
+              />
+              <QuickStart
+                items={[
+                  FEATURES.homework
+                    ? { id: 'homework', label: 'Homework', hint: `${pendingHomework.length} pending · open your list`, icon: IconHomework, tone: 'teal', onClick: () => selectTab('homework') }
+                    : null,
+                  { id: 'quizzes', label: 'Quizzes', hint: `${dashData.availableQuizzes.length} available to take or review`, icon: IconQuizzes, tone: 'blue', onClick: () => selectTab('quizzes') },
+                  { id: 'materials', label: 'Study Materials', hint: `${dashData.studyMaterials.length} PDFs shared with your class`, icon: IconMaterials, tone: 'purple', onClick: () => selectTab('materials') },
+                ].filter(Boolean)}
+              />
+            </>
           ) : null}
 
-          <section>
-            <h2 className="text-2xl font-bold text-white mb-6">Quizzes</h2>
-            {dashData.availableQuizzes.length === 0 ? (
-              <div className="rounded-lg border border-teal-500/20 p-8 text-center text-gray-400">No quizzes yet.</div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {dashData.availableQuizzes.map((quiz) => (
-                  <button
-                    key={quiz.id}
-                    type="button"
-                    onClick={() => navigate(`/quizzes/${quiz.id}`)}
-                    className="text-left rounded-xl border border-teal-500/30 bg-slate-900/50 p-6 hover:border-teal-400/60"
-                  >
-                    <h3 className="text-lg font-bold text-white">{quiz.title}</h3>
-                    <p className="text-sm text-slate-400 mt-2">{quiz.subject_name || 'Subject'} · {quiz.class_name || 'Class'}</p>
-                    <p className="mt-4 font-semibold text-teal-300">
-                      {quiz.score != null ? `View result: ${quiz.score}%` : 'Take quiz'}
-                    </p>
-                  </button>
-                ))}
-              </div>
-            )}
-          </section>
+          {FEATURES.homework && activeTab === 'homework' ? (
+            <Panel
+              title="Homework"
+              subtitle="Mark work complete when you finish. Your mark appears here once the teacher has looked at it."
+              icon={IconHomework}
+              tone="blue"
+            >
+              {dashData.assignedHomework.length === 0 ? (
+                <EmptyState>No homework yet. Enjoy the quiet while it lasts.</EmptyState>
+              ) : (
+                <div className="space-y-3">
+                  {dashData.assignedHomework.map((homework) => {
+                    const done = isHomeworkDone(homework);
+                    const overdue = overdueHomework.some((item) => item.id === homework.id);
+                    return (
+                      <RowCard key={homework.id} icon={IconHomework} tone={overdue && !done ? 'orange' : 'blue'}>
+                        <div className="ic-list-body">
+                          <h3 className="ic-list-title">{homework.title}</h3>
+                          <p className="ic-list-meta">
+                            {homework.subject || 'Subject'} · {homework.class_name || 'Class'} · Due {formatDueDate(homework.due_date)}
+                          </p>
+                          {homework.description ? <p className="text-sm text-slate-600 mt-2">{homework.description}</p> : null}
+                          {homework.score != null ? (
+                            <p className="text-sm text-teal-800 mt-2 font-semibold">
+                              Mark: {homework.score}/{homework.max_score ?? 10}
+                              {homework.feedback ? ` · ${homework.feedback}` : ''}
+                            </p>
+                          ) : null}
+                        </div>
+                        <div className="ic-list-actions">
+                          {done ? (
+                            <StatusPill tone={homework.score != null ? 'mint' : 'ok'}>
+                              {homework.score != null ? 'Marked' : 'Handed in'}
+                            </StatusPill>
+                          ) : (
+                            <>
+                              {overdue ? <StatusPill tone="danger">Overdue</StatusPill> : null}
+                              <button type="button" onClick={() => markHomeworkComplete(homework.id)} className="ic-btn-primary text-sm">
+                                Mark complete
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </RowCard>
+                    );
+                  })}
+                </div>
+              )}
+            </Panel>
+          ) : null}
 
-          <section>
-            <h2 className="text-2xl font-bold text-white mb-6">Study materials</h2>
-            {dashData.studyMaterials.length === 0 ? (
-              <div className="rounded-lg border border-teal-500/20 p-8 text-center text-gray-400">No study materials have been shared with your class yet.</div>
-            ) : (
-              <div className="space-y-4">
-                {dashData.studyMaterials.map((material) => (
-                  <a
-                    key={material.id}
-                    href={`${fileOrigin}${material.fileUrl}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="block rounded-xl border border-teal-500/30 bg-slate-900/50 p-6 hover:border-teal-400/60"
-                  >
-                    <h3 className="text-lg font-bold text-white">{material.title}</h3>
-                    <p className="text-sm text-slate-400 mt-1">{material.subject} · {material.class_name}</p>
-                  </a>
-                ))}
-              </div>
-            )}
-          </section>
-        </main>
+          {activeTab === 'quizzes' ? (
+            <Panel
+              title="Quizzes"
+              subtitle="Open a quiz to write it, or reopen one you have already finished to see your score."
+              icon={IconQuizzes}
+              tone="purple"
+            >
+              {dashData.availableQuizzes.length === 0 ? (
+                <EmptyState>No quizzes yet.</EmptyState>
+              ) : (
+                <div className="space-y-3">
+                  {dashData.availableQuizzes.map((quiz) => (
+                    <RowCard
+                      key={quiz.id}
+                      as="button"
+                      type="button"
+                      onClick={() => navigate(`/quizzes/${quiz.id}`)}
+                      icon={IconQuizzes}
+                      tone="purple"
+                    >
+                      <div className="ic-list-body">
+                        <h3 className="ic-list-title">{quiz.title}</h3>
+                        <p className="ic-list-meta">
+                          {quiz.subject_name || 'Subject'} · {quiz.class_name || 'Class'} · Due {formatDueDate(quiz.due_date || quiz.dueDate)}
+                        </p>
+                      </div>
+                      <div className="ic-list-actions">
+                        {quiz.score != null ? (
+                          <StatusPill tone="mint">{quiz.score}%</StatusPill>
+                        ) : (
+                          <span className="ic-btn-soft">Take quiz</span>
+                        )}
+                      </div>
+                    </RowCard>
+                  ))}
+                </div>
+              )}
+            </Panel>
+          ) : null}
+
+          {activeTab === 'materials' ? (
+            <Panel
+              title="Study materials"
+              subtitle="PDFs shared with your class — open them in a new tab to revise."
+              icon={IconMaterials}
+              tone="teal"
+            >
+              {dashData.studyMaterials.length === 0 ? (
+                <EmptyState>No study materials have been shared with your class yet.</EmptyState>
+              ) : (
+                <div className="space-y-3">
+                  {dashData.studyMaterials.map((material) => (
+                    <RowCard
+                      key={material.id}
+                      as="a"
+                      href={`${fileOrigin}${material.fileUrl}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      icon={IconMaterials}
+                      tone="teal"
+                    >
+                      <div className="ic-list-body">
+                        <h3 className="ic-list-title">{material.title}</h3>
+                        <p className="ic-list-meta">{material.subject} · {material.class_name}</p>
+                      </div>
+                      <div className="ic-list-actions">
+                        <span className="ic-btn-soft">Open PDF</span>
+                      </div>
+                    </RowCard>
+                  ))}
+                </div>
+              )}
+            </Panel>
+          ) : null}
+        </>
       )}
-    </div>
+    </DashboardShell>
   );
 }

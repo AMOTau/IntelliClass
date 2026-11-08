@@ -13,6 +13,7 @@ function buildPublicUser(user) {
     firstName: user.first_name,
     lastName: user.last_name,
     email: user.email,
+    phone: user.phone || '',
     createdAt: user.created_at,
     updatedAt: user.updated_at,
   };
@@ -82,7 +83,7 @@ authRouter.post('/login', async (req, res, next) => {
 
     const normalizedEmail = email.trim().toLowerCase();
     const result = await pool.query(
-      `SELECT id, role, first_name, last_name, email, password_hash, created_at, updated_at
+      `SELECT id, role, first_name, last_name, email, phone, password_hash, created_at, updated_at
        FROM users
        WHERE email = $1`,
       [normalizedEmail]
