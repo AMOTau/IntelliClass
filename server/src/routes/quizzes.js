@@ -11,6 +11,7 @@ import {
 import { ensureFullMaterialText, getMaterialChapters } from '../services/quizAi/knowledgeBase.js';
 import { loadHistory, recordGenerationExchange } from '../services/quizAi/conversationHistory.js';
 import { normalizeDifficultyMix } from '../services/quizAi/systemInstructions.js';
+import { quizClassInsights } from '../services/insights.js';
 import { sendQuizCompletedEmail, sendQuizPublishedEmail } from '../utils/email.js';
 import { deliver, parentsOfClass, parentsOfLearner, teacherContact } from '../utils/notify.js';
 
@@ -132,6 +133,8 @@ function buildQuizSummary(row) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     questionCount: Number(row.question_count ?? 0),
+    submissionCount: row.submission_count == null ? undefined : Number(row.submission_count),
+    averageScore: row.average_score == null ? undefined : Number(Number(row.average_score).toFixed(1)),
     pastDue: isQuizPastDue(row.due_date),
     submission: row.score == null
       ? null
@@ -189,12 +192,15 @@ async function getQuizAccessList(user) {
     const queryResult = await pool.query(
       `SELECT q.id, q.title, q.status, q.learner_template, q.due_date, q.class_id, c.name AS class_name, q.subject_id, s.name AS subject_name,
               q.material_id, m.title AS material_title, q.created_by, q.created_at, q.updated_at,
-              COUNT(ques.id) AS question_count
+              COUNT(DISTINCT ques.id) AS question_count,
+              COUNT(DISTINCT qs.id) AS submission_count,
+              AVG(qs.score) AS average_score
        FROM quizzes q
        LEFT JOIN classes c ON c.id = q.class_id
        LEFT JOIN subjects s ON s.id = q.subject_id
        LEFT JOIN materials m ON m.id = q.material_id
        LEFT JOIN questions ques ON ques.quiz_id = q.id
+       LEFT JOIN quiz_submissions qs ON qs.quiz_id = q.id
        ${user.role === 'admin' ? '' : 'WHERE q.created_by = $1'}
        GROUP BY q.id, q.title, q.status, q.learner_template, q.due_date, q.class_id, c.name, q.subject_id, s.name, q.material_id, m.title, q.created_by, q.created_at, q.updated_at
        ORDER BY q.due_date ASC NULLS LAST, q.created_at DESC`,
@@ -310,6 +316,22 @@ async function fetchQuizForUser(quizId, user, { learnerId } = {}) {
     reviewLearner = childAccess.rows[0];
   }
 
+  if (canManage && learnerId) {
+    const learnerResult = await pool.query(
+      `SELECT u.id, u.first_name, u.last_name
+       FROM users u
+       JOIN quiz_submissions qs ON qs.learner_id = u.id AND qs.quiz_id = $1
+       WHERE u.id = $2`,
+      [quizId, learnerId]
+    );
+    if (learnerResult.rowCount === 0) {
+      const error = new Error('That learner has not submitted this quiz yet.');
+      error.statusCode = 404;
+      throw error;
+    }
+    reviewLearner = learnerResult.rows[0];
+  }
+
   if (!canManage && user.role !== 'learner' && user.role !== 'parent') {
     const error = new Error('You do not have permission to view this quiz.');
     error.statusCode = 403;
@@ -325,7 +347,8 @@ async function fetchQuizForUser(quizId, user, { learnerId } = {}) {
   );
 
   let submission = null;
-  const submissionLearnerId = user.role === 'parent' ? reviewLearner?.id : user.role === 'learner' ? user.sub : null;
+  const submissionLearnerId = reviewLearner?.id
+    || (user.role === 'learner' ? user.sub : null);
   if (submissionLearnerId) {
     const submissionResult = await pool.query(
       `SELECT id, answers, total_questions, correct_count, score, submitted_at
@@ -950,6 +973,20 @@ quizzesRouter.get('/:id', requireAuth, async (req, res, next) => {
           : null,
       },
     });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+quizzesRouter.get('/:id/results', requireAuth, requireRole('teacher', 'admin'), async (req, res, next) => {
+  try {
+    const payload = await fetchQuizForUser(req.params.id, req.user);
+    if (!payload.canManage) {
+      return res.status(403).json({ message: 'You do not have permission to view these results.' });
+    }
+
+    const insights = await quizClassInsights(payload.quiz.id);
+    return res.json(insights);
   } catch (error) {
     return next(error);
   }

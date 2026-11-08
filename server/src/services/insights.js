@@ -220,3 +220,117 @@ export async function buildLearnerSummary(learnerId, range) {
 
   return { quizzes, homework, subjects, topics };
 }
+
+export async function quizClassInsights(quizId) {
+  const [submissionsResult, pendingResult, topicResult, questionResult] = await Promise.all([
+    pool.query(
+      `SELECT u.id AS learner_id, u.first_name, u.last_name,
+              qs.score, qs.correct_count, qs.total_questions, qs.submitted_at
+       FROM quiz_submissions qs
+       JOIN users u ON u.id = qs.learner_id
+       WHERE qs.quiz_id = $1
+       ORDER BY qs.score ASC, u.first_name ASC, u.last_name ASC`,
+      [quizId]
+    ),
+    pool.query(
+      `SELECT u.id AS learner_id, u.first_name, u.last_name
+       FROM quizzes q
+       JOIN class_learners cl ON cl.class_id = q.class_id
+       JOIN users u ON u.id = cl.learner_id
+       WHERE q.id = $1
+         AND NOT EXISTS (
+           SELECT 1 FROM quiz_submissions qs
+           WHERE qs.quiz_id = q.id AND qs.learner_id = u.id
+         )
+       ORDER BY u.first_name ASC, u.last_name ASC`,
+      [quizId]
+    ),
+    pool.query(
+      `SELECT q.topic,
+              COUNT(*)::int AS total,
+              COUNT(*) FILTER (WHERE btrim(lower(a->>'answer')) = btrim(lower(q.correct_answer)))::int AS correct
+       FROM quiz_submissions qs
+       CROSS JOIN LATERAL jsonb_array_elements(qs.answers) AS a
+       JOIN questions q ON q.id::text = a->>'questionId'
+       WHERE qs.quiz_id = $1
+         AND jsonb_typeof(qs.answers) = 'array'
+         AND q.topic IS NOT NULL
+         AND btrim(q.topic) <> ''
+       GROUP BY q.topic`,
+      [quizId]
+    ),
+    pool.query(
+      `SELECT q.id, q.question_text, q.topic, q.question_order,
+              COUNT(qs.id)::int AS attempts,
+              COUNT(*) FILTER (WHERE btrim(lower(a->>'answer')) = btrim(lower(q.correct_answer)))::int AS correct
+       FROM questions q
+       LEFT JOIN quiz_submissions qs ON qs.quiz_id = q.quiz_id AND jsonb_typeof(qs.answers) = 'array'
+       LEFT JOIN LATERAL jsonb_array_elements(qs.answers) AS a ON a->>'questionId' = q.id::text
+       WHERE q.quiz_id = $1
+       GROUP BY q.id, q.question_text, q.topic, q.question_order
+       ORDER BY q.question_order ASC`,
+      [quizId]
+    ),
+  ]);
+
+  const submissions = submissionsResult.rows.map((row) => ({
+    learnerId: row.learner_id,
+    firstName: row.first_name,
+    lastName: row.last_name,
+    score: Number(row.score),
+    correctCount: Number(row.correct_count),
+    totalQuestions: Number(row.total_questions),
+    submittedAt: row.submitted_at,
+  }));
+
+  const pending = pendingResult.rows.map((row) => ({
+    learnerId: row.learner_id,
+    firstName: row.first_name,
+    lastName: row.last_name,
+  }));
+
+  const topics = [...topicResult.rows.reduce((map, row) => {
+    const label = topicLabel(row.topic);
+    const current = map.get(label) || { topic: label, total: 0, correct: 0 };
+    current.total += Number(row.total);
+    current.correct += Number(row.correct);
+    map.set(label, current);
+    return map;
+  }, new Map()).values()]
+    .map((entry) => ({ ...entry, accuracy: ratio(entry.correct, entry.total) }))
+    .filter((entry) => entry.total > 0);
+
+  const questions = questionResult.rows.map((row) => {
+    const attempts = Number(row.attempts) || 0;
+    const correct = Number(row.correct) || 0;
+    return {
+      questionId: row.id,
+      questionText: row.question_text,
+      topic: topicLabel(row.topic),
+      questionOrder: row.question_order,
+      attempts,
+      correct,
+      missed: Math.max(0, attempts - correct),
+      accuracy: ratio(correct, attempts),
+    };
+  }).filter((question) => question.attempts > 0);
+
+  const averageScore = submissions.length
+    ? Math.round((submissions.reduce((sum, row) => sum + row.score, 0) / submissions.length) * 10) / 10
+    : null;
+
+  return {
+    summary: {
+      submittedCount: submissions.length,
+      pendingCount: pending.length,
+      averageScore,
+      lowestScore: submissions.length ? submissions[0].score : null,
+      highestScore: submissions.length ? Math.max(...submissions.map((row) => row.score)) : null,
+    },
+    submissions,
+    pending,
+    strengths: [...topics].sort((a, b) => b.accuracy - a.accuracy || b.total - a.total).slice(0, 4),
+    weaknesses: [...topics].sort((a, b) => a.accuracy - b.accuracy || b.total - a.total).slice(0, 4),
+    questions: [...questions].sort((a, b) => (a.accuracy ?? 100) - (b.accuracy ?? 100)).slice(0, 6),
+  };
+}

@@ -14,28 +14,42 @@ async function ensureSchema() {
 }
 
 async function ensureDefaultAdmin() {
-  const adminCountResult = await pool.query("SELECT COUNT(*)::int AS count FROM users WHERE role = 'admin'");
-  if (adminCountResult.rows[0].count > 0) {
-    return;
-  }
-
   const defaultEmail = 'admin@int.com';
   const defaultPassword = 'Admin@123';
+  const resetRequested = process.env.RESET_DEFAULT_ADMIN === 'true';
 
-  const existingEmailResult = await pool.query('SELECT id FROM users WHERE email = $1', [defaultEmail]);
-  if (existingEmailResult.rowCount > 0) {
-    console.warn('Default admin email already exists but no admin role was found. Skipping automatic admin seed.');
+  const existing = await pool.query(
+    'SELECT id, role FROM users WHERE lower(email) = $1',
+    [defaultEmail]
+  );
+
+  if (existing.rowCount === 0) {
+    const passwordHash = await bcrypt.hash(defaultPassword, 10);
+    await pool.query(
+      `INSERT INTO users (first_name, last_name, email, password_hash, role)
+       VALUES ($1, $2, $3, $4, 'admin')`,
+      ['System', 'Administrator', defaultEmail, passwordHash]
+    );
+    console.log('Seeded default admin account: admin@int.com / Admin@123');
     return;
   }
 
-  const passwordHash = await bcrypt.hash(defaultPassword, 10);
-  await pool.query(
-    `INSERT INTO users (first_name, last_name, email, password_hash, role)
-     VALUES ($1, $2, $3, $4, 'admin')`,
-    ['System', 'Administrator', defaultEmail, passwordHash]
-  );
+  if (existing.rows[0].role !== 'admin') {
+    await pool.query("UPDATE users SET role = 'admin', updated_at = now() WHERE id = $1", [existing.rows[0].id]);
+    console.log('Updated admin@int.com to the admin role.');
+  }
 
-  console.log('Seeded default admin account: admin@int.com');
+  if (resetRequested) {
+    const passwordHash = await bcrypt.hash(defaultPassword, 10);
+    await pool.query(
+      'UPDATE users SET password_hash = $1, updated_at = now() WHERE id = $2',
+      [passwordHash, existing.rows[0].id]
+    );
+    console.log('Reset default admin password to Admin@123. Remove RESET_DEFAULT_ADMIN from Render after login.');
+    return;
+  }
+
+  console.log('Default admin already exists. Sign in as admin@int.com (set RESET_DEFAULT_ADMIN=true on Render to reset the password).');
 }
 
 async function ensureDefaultAcademics() {
@@ -79,6 +93,10 @@ async function ensureDefaultAcademics() {
       );
     }
   }
+
+  const classCount = await pool.query('SELECT COUNT(*)::int AS count FROM classes');
+  const subjectCount = await pool.query('SELECT COUNT(*)::int AS count FROM subjects');
+  console.log(`Academics ready: ${classCount.rows[0].count} classes, ${subjectCount.rows[0].count} subjects.`);
 }
 
 async function startServer() {

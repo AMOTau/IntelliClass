@@ -2440,3 +2440,150 @@ a.ic-list-item {
     grid-template-columns: 1fr 1fr;
   }
 }
+
+.ic-class-results {
+  padding: 1.2rem 1.25rem 1.35rem;
+  border-radius: 1.35rem;
+  background: #fff;
+  border: 1px solid var(--ic-border);
+  box-shadow: 0 10px 24px rgba(31, 92, 77, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+}
+
+.ic-class-results-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-end;
+}
+
+.ic-class-results-title {
+  margin: 0.15rem 0 0;
+  font-size: 1.35rem;
+  color: #164f40;
+}
+
+.ic-class-stats {
+  display: flex;
+  gap: 1.1rem;
+}
+
+.ic-class-stats p {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #164f40;
+}
+
+.ic-class-stats span {
+  font-size: 0.75rem;
+  color: var(--ic-muted);
+}
+
+.ic-class-skill-grid,
+.ic-class-people {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.85rem;
+}
+
+.ic-class-skill,
+.ic-class-missed {
+  padding: 0.9rem 1rem;
+  border-radius: 1rem;
+  background: #f6faf7;
+}
+
+.ic-class-skill--warn {
+  background: #fff6ef;
+}
+
+.ic-class-skill-title {
+  margin: 0 0 0.55rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #2a7a66;
+}
+
+.ic-class-skill-empty,
+.ic-class-meta {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--ic-muted);
+}
+
+.ic-class-skill ul,
+.ic-class-missed ul,
+.ic-class-pending {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ic-class-skill li,
+.ic-class-missed li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.9rem;
+  padding: 0.28rem 0;
+  color: #1f3a34;
+}
+
+.ic-class-roster {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.ic-class-roster li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.7rem 0.8rem;
+  border-radius: 0.9rem;
+  background: #f6faf7;
+}
+
+.ic-class-name {
+  margin: 0;
+  font-weight: 700;
+  color: #164f40;
+}
+
+.ic-class-roster-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.ic-class-score {
+  font-weight: 800;
+  font-size: 0.95rem;
+}
+
+.ic-class-score.is-ok { color: #1f8a74; }
+.ic-class-score.is-warn { color: #c05621; }
+.ic-class-score.is-danger { color: #b42318; }
+
+.ic-class-pending li {
+  padding: 0.25rem 0;
+  font-size: 0.9rem;
+  color: #3d5c54;
+}
+
+@media (min-width: 800px) {
+  .ic-class-skill-grid,
+  .ic-class-people {
+    grid-template-columns: 1fr 1fr;
+  }
+}

@@ -3,6 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import AiHistoryPanel from '../components/AiHistoryPanel';
 import AiRegeneratePanel from '../components/AiRegeneratePanel';
 import LearnerQuizPlay, { LEARNER_TEMPLATE_OPTIONS } from '../components/LearnerQuizPlay';
+import QuizClassResults from '../components/QuizClassResults';
 import QuizResultsReview from '../components/QuizResultsReview';
 import DashboardShell, {
   AlertBanner,
@@ -52,6 +53,8 @@ export default function QuizPage() {
   const [draftDueDate, setDraftDueDate] = useState('');
   const [notice, setNotice] = useState('');
   const [historyKey, setHistoryKey] = useState(0);
+  const [classResults, setClassResults] = useState(null);
+  const [classResultsLoading, setClassResultsLoading] = useState(false);
 
   const dashboardPath = dashboardPathForRole(user?.role);
   const navTabs = tabsForRole(user?.role);
@@ -90,6 +93,17 @@ export default function QuizPage() {
       if (data.quiz.submission?.results) {
         seedInstantExplanations(data.quiz.submission.results);
       }
+      if (canManage) {
+        setClassResultsLoading(true);
+        try {
+          const results = await api.get(`/quizzes/${quizId}/results`);
+          setClassResults(results.data);
+        } catch {
+          setClassResults(null);
+        } finally {
+          setClassResultsLoading(false);
+        }
+      }
     } catch (requestError) {
       setError(parseApiError(requestError, 'Failed to load quiz.'));
     } finally {
@@ -100,9 +114,10 @@ export default function QuizPage() {
   const isTeacherReview = Boolean(quizData && canManage);
   const isParentReview = Boolean(quizData && user?.role === 'parent');
   const isLearnerView = Boolean(quizData && user?.role === 'learner');
+  const isReviewingLearner = Boolean(isTeacherReview && reviewLearnerId && submissionResult);
   const quizPastDue = Boolean(quizData?.pastDue);
   const canTakeQuiz = quizData && user?.role === 'learner' && quizData.status === 'published' && !submissionResult && !quizPastDue;
-  const showResultsReview = Boolean(submissionResult) && (isParentReview || isLearnerView);
+  const showResultsReview = Boolean(submissionResult) && (isParentReview || isLearnerView || isReviewingLearner);
   const questionCount = useMemo(() => quizData?.questions?.length ?? 0, [quizData]);
 
   async function handleSubmitQuiz(event) {
@@ -355,7 +370,7 @@ export default function QuizPage() {
             title={quizData.title}
             className={quizData.className}
             subjectName={quizData.subjectName}
-            childName={isParentReview
+            childName={isParentReview || isReviewingLearner
               ? [quizData.reviewLearner?.firstName, quizData.reviewLearner?.lastName].filter(Boolean).join(' ')
               : `${user?.firstName || ''} ${user?.lastName || ''}`.trim()}
             teacherName={quizData.teacherName}
@@ -367,9 +382,9 @@ export default function QuizPage() {
             explanations={explanations}
             explainingId={explainingId}
             onExplain={isLearnerView ? (questionId) => explainAnswer(questionId, { enrichWithAi: true }) : undefined}
-            onBack={() => goDashboardTab('quizzes')}
+            onBack={() => (isReviewingLearner ? navigate(`/quizzes/${quizId}`) : goDashboardTab('quizzes'))}
             onMessageTeacher={isParentReview ? () => goDashboardTab('notes') : undefined}
-            viewer={isParentReview ? 'parent' : 'learner'}
+            viewer={isParentReview ? 'parent' : isReviewingLearner ? 'parent' : 'learner'}
           />
         </>
       ) : (
@@ -407,8 +422,15 @@ export default function QuizPage() {
 
       {showResultsReview ? null : (
         <>
-        {isTeacherReview ? (
+        {isTeacherReview && !isReviewingLearner ? (
           <div className="space-y-5">
+            {quizData.status === 'published' || classResults?.summary?.submittedCount ? (
+              <QuizClassResults
+                data={classResults}
+                loading={classResultsLoading}
+                onReviewLearner={(row) => navigate(`/quizzes/${quizId}?learnerId=${row.learnerId}`)}
+              />
+            ) : null}
             <input
               value={draftTitle}
               onChange={(event) => setDraftTitle(event.target.value)}

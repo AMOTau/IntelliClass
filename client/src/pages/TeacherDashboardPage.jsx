@@ -901,7 +901,7 @@ export default function TeacherDashboardPage() {
           {activeTab === 'quizzes' ? (
           <Panel
             title="Quizzes"
-            subtitle="Open a draft, edit questions, or publish to the class."
+            subtitle="Open a draft, publish to the class, or review who has submitted and how they scored."
             icon={IconQuizzes}
             tone="purple"
           >
@@ -922,13 +922,16 @@ export default function TeacherDashboardPage() {
                           {quiz.className || quiz.class_name || 'Class'} · {quiz.subjectName || quiz.subject_name || 'Subject'} · {quiz.questionCount ?? 0} questions
                           {quiz.learnerTemplate ? ` · ${String(quiz.learnerTemplate).replace('_', ' ')}` : ''}
                           {` · Due ${formatDueDate(quiz.dueDate || quiz.due_date)}`}
+                          {quiz.status === 'published'
+                            ? ` · ${quiz.submissionCount ?? 0} submitted${quiz.averageScore != null ? ` · avg ${quiz.averageScore}%` : ''}`
+                            : ''}
                         </p>
                       </button>
                     </div>
                     <div className="ic-list-actions">
                       <StatusPill tone={quiz.status === 'published' ? 'ok' : 'warn'}>{quiz.status}</StatusPill>
                       <button type="button" onClick={() => navigate(`/quizzes/${quiz.id}`)} className="ic-btn-primary text-sm">
-                        {quiz.status === 'published' ? 'View / edit' : 'Open draft'}
+                        {quiz.status === 'published' ? 'Results / edit' : 'Open draft'}
                       </button>
                       <button type="button" onClick={() => deleteQuiz(quiz.id)} className="ic-btn-danger">
                         Delete
