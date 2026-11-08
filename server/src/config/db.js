@@ -6,10 +6,13 @@ if (!env.databaseUrl) {
 }
 
 function useSsl(connectionString, nodeEnv) {
+  const url = String(connectionString || '').toLowerCase();
+  if (url.includes('localhost') || url.includes('127.0.0.1')) {
+    return false;
+  }
   if (nodeEnv === 'production') {
     return true;
   }
-  const url = String(connectionString || '').toLowerCase();
   return url.includes('render.com') || url.includes('sslmode=require');
 }
 
