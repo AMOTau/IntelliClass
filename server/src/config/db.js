@@ -5,7 +5,15 @@ if (!env.databaseUrl) {
   throw new Error('DATABASE_URL is not set. Create server/.env before starting the API.');
 }
 
+function useSsl(connectionString, nodeEnv) {
+  if (nodeEnv === 'production') {
+    return true;
+  }
+  const url = String(connectionString || '').toLowerCase();
+  return url.includes('render.com') || url.includes('sslmode=require');
+}
+
 export const pool = new Pool({
   connectionString: env.databaseUrl,
-  ssl: env.nodeEnv === 'production' ? { rejectUnauthorized: false } : false,
+  ssl: useSsl(env.databaseUrl, env.nodeEnv) ? { rejectUnauthorized: false } : false,
 });
