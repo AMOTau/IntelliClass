@@ -1,16 +1,5 @@
-import { Navigate } from 'react-router-dom';
-import { useAuthSession } from '../context/AuthSessionContext';
+import ProtectedRoute from './ProtectedRoute';
 
 export default function AdminRoute({ children }) {
-  const { isAuthed, user } = useAuthSession();
-
-  if (!isAuthed) {
-    return <Navigate to="/login" replace />;
-  }
-
-  if (user?.role !== 'admin') {
-    return <Navigate to="/profile" replace />;
-  }
-
-  return children;
+  return <ProtectedRoute roles={['admin']}>{children}</ProtectedRoute>;
 }

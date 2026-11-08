@@ -59,7 +59,7 @@ export default function App() {
         <Route
           path="/teacher-dashboard"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute roles={['teacher']}>
               <TeacherDashboardPage />
             </ProtectedRoute>
           }
@@ -67,7 +67,7 @@ export default function App() {
         <Route
           path="/learner-dashboard"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute roles={['learner']}>
               <LearnerDashboardPage />
             </ProtectedRoute>
           }
@@ -91,7 +91,7 @@ export default function App() {
         <Route
           path="/parent-dashboard"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute roles={['parent']}>
               <ParentDashboardPage />
             </ProtectedRoute>
           }
