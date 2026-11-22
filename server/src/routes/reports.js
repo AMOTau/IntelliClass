@@ -1,4 +1,10 @@
 import { Router } from 'express';
+import multer from 'multer';
+import { randomUUID } from 'node:crypto';
+import { existsSync, mkdirSync } from 'node:fs';
+import { unlink } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { pool } from '../config/db.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { buildLearnerSummary } from '../services/insights.js';
@@ -8,6 +14,52 @@ import { deliver, parentsOfLearner, teacherContact } from '../utils/notify.js';
 export const reportsRouter = Router();
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const uploadsRoot = fileURLToPath(new URL('../../uploads', import.meta.url));
+const reportsUploadDir = path.join(uploadsRoot, 'reports');
+
+if (!existsSync(reportsUploadDir)) {
+  mkdirSync(reportsUploadDir, { recursive: true });
+}
+
+const reportFileStorage = multer.diskStorage({
+  destination: (req, file, callback) => callback(null, reportsUploadDir),
+  filename: (req, file, callback) => {
+    const extension = path.extname(file.originalname || '').toLowerCase() || '.pdf';
+    callback(null, `${randomUUID()}${extension}`);
+  },
+});
+
+const reportFileUpload = multer({
+  storage: reportFileStorage,
+  limits: {
+    fileSize: 25 * 1024 * 1024,
+  },
+  fileFilter: (req, file, callback) => {
+    const extension = path.extname(file.originalname || '').toLowerCase();
+    const isPdf = file.mimetype === 'application/pdf' || extension === '.pdf';
+
+    if (!isPdf) {
+      return callback(new Error('Only PDF files are supported for term reports.'));
+    }
+
+    return callback(null, true);
+  },
+});
+
+function handleReportUpload(req, res, next) {
+  if (!req.is('multipart/form-data')) {
+    return next();
+  }
+
+  return reportFileUpload.single('file')(req, res, (error) => {
+    if (!error) {
+      return next();
+    }
+
+    error.statusCode = 400;
+    return next(error);
+  });
+}
 
 function mapReport(row, { includeSummary = true } = {}) {
   return {
@@ -22,6 +74,9 @@ function mapReport(row, { includeSummary = true } = {}) {
     periodEnd: row.period_end,
     comment: row.comment,
     publishedAt: row.published_at,
+    fileName: row.file_name ?? null,
+    fileUrl: row.file_path ? `/uploads/${row.file_path}` : null,
+    hasFile: Boolean(row.file_path),
     createdAt: row.created_at,
     summary: includeSummary ? row.summary ?? {} : undefined,
   };
@@ -167,7 +222,7 @@ reportsRouter.get('/:id', requireAuth, async (req, res, next) => {
 
 // Builds the snapshot now; publishing is a separate step so a teacher can add
 // a comment before parents are alerted.
-reportsRouter.post('/', requireAuth, requireRole('teacher', 'admin'), async (req, res, next) => {
+reportsRouter.post('/', requireAuth, requireRole('teacher', 'admin'), handleReportUpload, async (req, res, next) => {
   try {
     const { learnerId, periodStart, periodEnd } = req.body;
     const periodLabel = String(req.body.periodLabel || '').trim() || null;
@@ -204,14 +259,22 @@ reportsRouter.post('/', requireAuth, requireRole('teacher', 'admin'), async (req
     const title = String(req.body.title || '').trim()
       || `${periodLabel || 'Progress'} report — ${learner.first_name} ${learner.last_name}`;
 
+    const existingResult = await pool.query(
+      'SELECT id, file_path FROM reports WHERE learner_id = $1 AND period_start = $2 AND period_end = $3',
+      [learnerId, periodStart, periodEnd]
+    );
+    const previousReport = existingResult.rows[0] ?? null;
+
     const saved = await pool.query(
-      `INSERT INTO reports (learner_id, class_id, created_by, title, period_label, period_start, period_end, summary, comment, published_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CASE WHEN $10 THEN now() ELSE NULL END)
+      `INSERT INTO reports (learner_id, class_id, created_by, title, period_label, period_start, period_end, summary, comment, file_name, file_path, published_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, CASE WHEN $12 THEN now() ELSE NULL END)
        ON CONFLICT (learner_id, period_start, period_end)
        DO UPDATE SET title = EXCLUDED.title,
                      period_label = EXCLUDED.period_label,
                      summary = EXCLUDED.summary,
                      comment = EXCLUDED.comment,
+                     file_name = COALESCE(EXCLUDED.file_name, reports.file_name),
+                     file_path = COALESCE(EXCLUDED.file_path, reports.file_path),
                      class_id = EXCLUDED.class_id,
                      published_at = COALESCE(reports.published_at, EXCLUDED.published_at),
                      updated_at = now()
@@ -226,11 +289,19 @@ reportsRouter.post('/', requireAuth, requireRole('teacher', 'admin'), async (req
         periodEnd,
         JSON.stringify(summary),
         comment,
+        req.file?.originalname || null,
+        req.file ? `reports/${req.file.filename}` : null,
         publish,
       ]
     );
 
     const report = saved.rows[0];
+
+    if (req.file && previousReport?.file_path && previousReport.file_path !== report.file_path) {
+      const previousFilePath = path.join(uploadsRoot, previousReport.file_path);
+      await unlink(previousFilePath).catch(() => undefined);
+    }
+
     let notifiedParents = 0;
 
     if (report.published_at) {
@@ -254,6 +325,9 @@ reportsRouter.post('/', requireAuth, requireRole('teacher', 'admin'), async (req
       notifiedParents,
     });
   } catch (error) {
+    if (req.file?.path) {
+      await unlink(req.file.path).catch(() => undefined);
+    }
     return next(error);
   }
 });
@@ -302,6 +376,10 @@ reportsRouter.delete('/:id', requireAuth, requireRole('teacher', 'admin'), async
     }
 
     await pool.query('DELETE FROM reports WHERE id = $1', [report.id]);
+    if (report.file_path) {
+      const absoluteFilePath = path.join(uploadsRoot, report.file_path);
+      await unlink(absoluteFilePath).catch(() => undefined);
+    }
     return res.json({ message: 'Report deleted.', id: report.id });
   } catch (error) {
     return next(error);

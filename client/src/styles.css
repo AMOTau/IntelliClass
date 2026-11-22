@@ -1838,6 +1838,35 @@ a.ic-list-item {
   resize: vertical;
 }
 
+.ic-page .fk-control > input[type="file"] {
+  min-height: 2.75rem;
+  padding: 0.34rem 0.42rem;
+  line-height: 1.2;
+}
+
+.ic-page .fk-control > input[type="file"]::file-selector-button {
+  margin-right: 0.65rem;
+  border: 0;
+  border-radius: 0.65rem;
+  background: linear-gradient(135deg, #1f8a74, #1b6f5e);
+  color: #fff;
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 700;
+  padding: 0.5rem 0.85rem;
+  cursor: pointer;
+  transition: filter 0.14s ease;
+}
+
+.ic-page .fk-control > input[type="file"]:hover::file-selector-button,
+.ic-page .fk-control > input[type="file"]:focus-visible::file-selector-button {
+  filter: brightness(1.06);
+}
+
+.ic-page .fk-control--icon > input[type="file"] {
+  padding-left: 2.85rem;
+}
+
 /* Beat global .ic-page input padding so icons clear the text */
 .ic-page .fk-control--icon > input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]),
 .ic-page .fk-control--icon > select,

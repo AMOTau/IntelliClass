@@ -113,7 +113,7 @@ export default function ParentMessageForm({ classes = [], learners = [], onSent 
 
         <FormActions>
           <span />
-          <FormSubmitButton disabled={saving} busyLabel="Sending…">
+          <FormSubmitButton disabled={saving} busy={saving} busyLabel="Sending…">
             {learnerId ? 'Send to this parent' : 'Send to the class parents'}
           </FormSubmitButton>
         </FormActions>

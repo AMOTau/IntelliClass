@@ -53,15 +53,17 @@ SLIDES = [
     {
         "n": "3",
         "title": "The proposed solution",
-        "on": "What each role actually does, including teacher review of AI drafts.",
+        "on": "Four roles. The teacher reviews each quiz, then sees weak topics and guides the class.",
         "say": [
             "About 30 seconds.",
             "The proposal is one platform and four roles.",
+            "The teacher does more than set the work.",
+            "After the quizzes, they see where learners struggle and use that to guide the class.",
             "The next slide shows the exact work each person can do.",
-            "The aim is more accountability, less admin, and earlier support.",
         ],
         "ppt": (
             "About 30 seconds. The proposal is one platform and four roles. "
+            "The teacher does more than set the work. After the quizzes, they see where learners struggle and use that to guide the class. "
             "The next slide shows the exact work each person can do. "
             "The aim is more accountability, less admin, and earlier support."
         ),
@@ -109,18 +111,19 @@ SLIDES = [
     {
         "n": "6",
         "title": "Emerging technology",
-        "on": "Draft from the PDF, summarise stored scores, explain a wrong answer. Not published yet.",
+        "on": "Draft a quiz, show the teacher weak topics and missed questions, explain a wrong answer.",
         "say": [
             "About 40 seconds.",
             "AI is used in three places only.",
             "It drafts quiz questions from the teacher’s own study material.",
-            "It summarises stored results and points to topics that may need attention.",
+            "It shows the teacher the weak topics and the questions most of the class missed.",
+            "The teacher uses that to guide the next lesson, or to write to a parent.",
             "When a learner misses a question, it explains why and suggests what to revise.",
             "Nothing is published until a teacher approves it. AI does not decide a pass or fail.",
         ],
         "ppt": (
             "About 40 seconds. AI drafts quiz questions from the teacher’s own material. "
-            "It summarises stored results and points to topics that may need attention. "
+            "It shows the teacher the weak topics and the questions most of the class missed, so the teacher can guide the next lesson or write to a parent. "
             "When a learner misses a question, it explains why and suggests what to revise. "
             "Nothing is published until a teacher approves it. AI does not decide a pass or fail."
         ),
@@ -128,38 +131,39 @@ SLIDES = [
     {
         "n": "7",
         "title": "Prototype",
-        "on": "Role sign-in, chapter PDFs, difficulty and publish, stored score, explanation, parent note.",
+        "on": "Sign-in, chapter PDFs, publish, stored score, explanation, then class insight for the teacher.",
         "say": [
             "About 40 seconds.",
             "A person signs in to their own dashboard.",
             "A teacher uploads a PDF. The text is extracted, including by chapter.",
             "They can ask for a draft, choose a difficulty mix, edit it, and only then publish.",
             "A learner takes the quiz, the score is stored, and a wrong answer can ask for an explanation.",
-            "Parents can see results, and a teacher can write to them.",
-            "Homework tracking and term reports are also in the system.",
+            "The teacher then sees where the class struggled and uses that to guide the next lesson.",
+            "They can also write to a parent. Homework and term reports are in the system too.",
         ],
         "ppt": (
             "About 40 seconds. A person signs in to their own dashboard. A teacher uploads a PDF and the text is extracted, including by chapter. "
             "They can ask for a draft, choose a difficulty mix, edit it, and only then publish. "
             "A learner takes the quiz, the score is stored, and a wrong answer can ask for an explanation. "
-            "Parents can see results, and a teacher can write to them. Homework tracking and term reports are also in the system."
+            "The teacher then sees where the class struggled and uses that to guide the next lesson, or to write to a parent. "
+            "Homework tracking and term reports are also in the system."
         ),
     },
     {
         "n": "8",
         "title": "Results and limitations",
-        "on": "Review before publish, notes check, stored scores. Vague output, scanned PDFs, fallback, no pass mark.",
+        "on": "Review before publish, notes check, teacher guidance from weak topics. Vague output, scanned PDFs, fallback, no pass mark.",
         "say": [
             "About 40 seconds.",
             "The path from a PDF to a stored score works.",
-            "Questions are checked against the notes, and the teacher can edit or reject a draft.",
+            "The teacher can see where the class struggled and guide from that.",
             "The model can still be vague or wrong.",
             "A scanned PDF cannot be read.",
             "If the AI service fails, a simpler draft is built straight from the notes.",
             "It is a website, not a phone app.",
         ],
         "ppt": (
-            "About 40 seconds. The path from a PDF to a stored score works. Questions are checked against the notes, and the teacher can edit or reject a draft. "
+            "About 40 seconds. The path from a PDF to a stored score works. Questions are checked against the notes, and the teacher can see where the class struggled and guide from that. "
             "The model can still be vague or wrong. A scanned PDF cannot be read. "
             "If the AI service fails, a simpler draft is built from the notes. AI does not decide a pass or fail. It is a website, not a phone app."
         ),
@@ -173,12 +177,34 @@ SLIDES = [
             "Close on those three lines.",
             "Then take questions.",
             "If a question is about AI, go back to the three uses or the quiz path.",
+            "If a question is about requirements, use the last page. Do not read the whole list.",
         ],
         "ppt": (
             "About 15 seconds. Close on those three lines, then take questions. "
-            "If a question is about AI, go back to the three uses or the quiz path."
+            "If a question is about AI, go back to the three uses or the quiz path. "
+            "If a question is about requirements, use the last page. Do not read the whole list."
         ),
     },
+]
+
+FUNCTIONAL = [
+    "FR-01  The system shall let a user sign in and open only the dashboard for that role.",
+    "FR-02  The system shall let an administrator manage users, classes and subjects.",
+    "FR-03  The system shall let a teacher upload a PDF, and it shall extract the text.",
+    "FR-04  The system shall draft a quiz from that text, and it shall hide the quiz until the teacher reviews and publishes it.",
+    "FR-05  The system shall let a learner complete a published quiz, and it shall store the score.",
+    "FR-06  The system shall explain a wrong answer from that question and the notes.",
+    "FR-07  The system shall let a parent see results, and it shall let a teacher write to a parent.",
+    "FR-08  The system shall let homework be assigned, submitted and marked. Partial: the routes exist, and the demo menus are hidden.",
+    "FR-09  The system shall prepare a term report from stored results. Partial: the routes exist, and the demo menus are hidden.",
+    "FR-10  Not in this prototype: a phone app, reading a scanned PDF, or an AI pass mark. The system shall not set a pass or fail.",
+]
+
+NONFUNCTIONAL = [
+    "NFR-01  Performance. The system shall return a normal dashboard or database request within 3 seconds.",
+    "NFR-02  Usability. The system shall let a new user sign in and reach the right dashboard without help.",
+    "NFR-03  Reliability. The system shall keep a submitted quiz result, and that result shall still be there afterwards.",
+    "NFR-04  Security. The system shall hash passwords, use a sign-in token, and check the role on every protected action. The AI key stays on the server.",
 ]
 
 
@@ -218,7 +244,7 @@ def banner(doc, number, title, space_before):
     p = cell.paragraphs[0]
     p.paragraph_format.space_before = Pt(0)
     p.paragraph_format.space_after = Pt(0)
-    set_run(p.add_run(), f"{number}     {title}", 16, True, RGBColor(0xFF, 0xFF, 0xFF))
+    set_run(p.add_run(), title if not number else f"{number}     {title}", 16, True, RGBColor(0xFF, 0xFF, 0xFF))
     return table
 
 
@@ -271,6 +297,17 @@ def build_docx():
             add_line(doc, line, 13, False, TEXT, space_after=1, indent=0.3)
         if i % 2 == 1 and i != len(SLIDES) - 1:
             doc.add_page_break()
+
+    doc.add_page_break()
+    banner(doc, "", "Functional requirements", 2)
+    add_line(doc, "Read one of these only if you are asked. Each line is a requirement, not a measured result.", 12, False, MUTED, space_before=8, space_after=6)
+    for line in FUNCTIONAL:
+        add_line(doc, line, 12, False, TEXT, space_before=3, space_after=2)
+
+    add_line(doc, "Non-functional requirements", 16, True, TEXT, space_before=16, space_after=2)
+    add_line(doc, "These sit underneath the features. They are the targets from the proposal.", 12, False, MUTED, space_before=2, space_after=6)
+    for line in NONFUNCTIONAL:
+        add_line(doc, line, 12, False, TEXT, space_before=3, space_after=2)
 
     doc.save(DOCX)
 

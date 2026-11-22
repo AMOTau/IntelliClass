@@ -255,7 +255,7 @@ def solution_slide(prs, bg):
     text(s, 0.62, 1.48, 12, 0.35, "Academic work in one place, with AI only as an assistant.", 16, False, MUTED)
     cards = [
         ("Administrator", "Creates users, classes and subjects.", "Decides who belongs where."),
-        ("Teacher", "Uploads notes, sets work and quizzes.", "Reviews every AI draft first."),
+        ("Teacher", "Uploads notes and reviews each quiz.", "Sees weak topics, then guides the class."),
         ("Learner", "Opens materials and completes quizzes.", "Sees the score and why it was wrong."),
         ("Parent", "Sees homework, results and weak topics.", "Can receive a note from the teacher."),
     ]
@@ -271,6 +271,7 @@ def solution_slide(prs, bg):
     notes(
         s,
         "About 30 seconds. The proposal is one platform and four roles. "
+        "The teacher does more than set the work. After the quizzes, they see where learners struggle and use that to guide the class. "
         "The next slide shows the exact work each person can do. "
         "The aim is more accountability, less admin, and earlier support.",
     )
@@ -418,7 +419,7 @@ def ai_slide(prs, bg):
     text(s, 0.62, 0.84, 12, 0.55, "AI assists. Teachers decide.", 32, True, TEXT)
     items = [
         ("1", "Draft a quiz", "Questions are written from the uploaded PDF, by chapter.", "The teacher edits the draft. Learners cannot see it yet."),
-        ("2", "Read the pattern", "Summaries use stored scores and topic results.", "They point to work that may need another look."),
+        ("2", "Guide from the results", "The teacher sees weak topics and missed questions.", "They use that to guide the class, or write to a parent."),
         ("3", "Explain a miss", "A wrong answer is explained from the question and the notes.", "The learner is told what to revise."),
     ]
     for i, (num, title, line, extra) in enumerate(items):
@@ -433,7 +434,7 @@ def ai_slide(prs, bg):
     notes(
         s,
         "About 40 seconds. AI is used in three places only. It drafts quiz questions from the teacher’s own material. "
-        "It summarises stored results and points to topics that may need attention. "
+        "It shows the teacher the weak topics and the questions most of the class missed, so the teacher can guide the next lesson or write to a parent. "
         "When a learner misses a question, it explains why and suggests what to revise. "
         "Nothing is published until a teacher approves it. AI does not decide a pass or fail.",
     )
@@ -449,7 +450,7 @@ def prototype_slide(prs, bg):
         ("Draft quiz", "Choose the chapters and the difficulty.", "Edit the questions, then publish."),
         ("Take a quiz", "The learner answers multiple choice.", "The score is calculated and stored at once."),
         ("Ask why", "Only after a wrong answer.", "The explanation uses that question and the notes."),
-        ("Stay in view", "Dashboards show scores and weak topics.", "A teacher can also write to a parent."),
+        ("Class insight", "The teacher sees scores and weak topics.", "They use that to guide the next lesson."),
     ]
     for i, (title, line, extra) in enumerate(items):
         col, row = i % 3, i // 3
@@ -466,7 +467,8 @@ def prototype_slide(prs, bg):
         "About 40 seconds. A person signs in to their own dashboard. A teacher uploads a PDF and the text is extracted, including by chapter. "
         "They can ask for a draft, choose a difficulty mix, edit it, and only then publish. "
         "A learner takes the quiz, the score is stored, and a wrong answer can ask for an explanation. "
-        "Parents can see results, and a teacher can write to them. Homework tracking and term reports are also in the system.",
+        "The teacher then sees where the class struggled and uses that to guide the next lesson, or to write to a parent. "
+        "Homework tracking and term reports are also in the system.",
     )
 
 
@@ -477,7 +479,7 @@ def results_slide(prs, bg):
     holds = [
         "A PDF becomes a quiz only after teacher review",
         "Kept questions are checked against the notes",
-        "Score and topic are stored on the dashboards",
+        "The teacher sees weak topics and guides from them",
         "The teacher can edit, regenerate or reject",
     ]
     limits = [
@@ -501,7 +503,7 @@ def results_slide(prs, bg):
     footer(s, 8)
     notes(
         s,
-        "About 40 seconds. What holds: the path from a PDF to a stored score works, questions are checked against the notes, and the teacher can edit or reject a draft. "
+        "About 40 seconds. What holds: the path from a PDF to a stored score works, questions are checked against the notes, and the teacher can see where the class struggled and guide from that. "
         "The limits: the model can still be vague or wrong, a scanned PDF cannot be read, and if the AI service fails the system builds a simpler draft from the notes. "
         "AI does not decide a pass or fail. It is a website, not a phone app.",
     )

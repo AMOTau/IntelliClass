@@ -941,7 +941,7 @@ export default function AdminDashboardPage() {
                       parentEmail: '',
                     })}
                   />
-                  <FormSubmitButton disabled={saving.learnerFamily} busyLabel="Saving…">
+                  <FormSubmitButton disabled={saving.learnerFamily} busy={saving.learnerFamily} busyLabel="Saving…">
                     Create learner
                   </FormSubmitButton>
                 </FormActions>
@@ -1037,7 +1037,7 @@ export default function AdminDashboardPage() {
                       assignments: [createTeacherAssignmentBlock()],
                     })}
                   />
-                  <FormSubmitButton disabled={saving.teacherAssignment} busyLabel="Saving…">
+                  <FormSubmitButton disabled={saving.teacherAssignment} busy={saving.teacherAssignment} busyLabel="Saving…">
                     Create teacher
                   </FormSubmitButton>
                 </FormActions>

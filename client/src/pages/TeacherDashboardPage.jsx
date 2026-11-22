@@ -649,7 +649,7 @@ export default function TeacherDashboardPage() {
                 </FormStep>
                 <FormActions>
                   <span />
-                  <FormSubmitButton disabled={uploading || !readyToUpload} busyLabel="Uploading…">
+                  <FormSubmitButton disabled={uploading || !readyToUpload} busy={uploading} busyLabel="Uploading…">
                     Upload PDF
                   </FormSubmitButton>
                 </FormActions>
@@ -776,7 +776,7 @@ export default function TeacherDashboardPage() {
                 </FormStep>
                 <FormActions>
                   <span />
-                  <FormSubmitButton disabled={savingHomework} busyLabel="Assigning…">
+                  <FormSubmitButton disabled={savingHomework} busy={savingHomework} busyLabel="Assigning…">
                     Assign homework
                   </FormSubmitButton>
                 </FormActions>
@@ -884,9 +884,21 @@ export default function TeacherDashboardPage() {
                     </div>
                     <div className="ic-list-actions">
                       {report.publishedAt ? (
-                        <button type="button" onClick={() => navigate(`/reports/${report.id}`)} className="ic-btn-soft">
-                          Open
-                        </button>
+                        <>
+                          <button type="button" onClick={() => navigate(`/reports/${report.id}`)} className="ic-btn-soft">
+                            Open
+                          </button>
+                          {report.fileUrl ? (
+                            <>
+                              <a href={`${fileOrigin}${report.fileUrl}`} target="_blank" rel="noreferrer" className="ic-btn-soft">
+                                View PDF
+                              </a>
+                              <a href={`${fileOrigin}${report.fileUrl}`} download={report.fileName || 'term-report.pdf'} className="ic-btn-soft">
+                                Download
+                              </a>
+                            </>
+                          ) : null}
+                        </>
                       ) : (
                         <StatusPill tone="warn">Draft</StatusPill>
                       )}

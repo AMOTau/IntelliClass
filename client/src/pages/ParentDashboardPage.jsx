@@ -24,6 +24,8 @@ import { formatDueDate } from '../utils/dates';
 import { parseApiError } from '../utils/errors';
 import { FEATURES } from '../utils/featureFlags';
 
+const fileOrigin = (import.meta.env.VITE_API_URL ?? 'http://localhost:4000/api').replace(/\/api\/?$/, '');
+
 function homeworkStatus(item) {
   if (item.score !== null && item.score !== undefined) {
     return { label: `Marked ${item.score}/${item.maxScore}`, tone: 'mint' };
@@ -337,6 +339,16 @@ export default function ParentDashboardPage() {
                         <button type="button" onClick={() => navigate(`/reports/${report.id}`)} className="ic-btn-primary text-sm">
                           Read report
                         </button>
+                        {report.fileUrl ? (
+                          <>
+                            <a href={`${fileOrigin}${report.fileUrl}`} target="_blank" rel="noreferrer" className="ic-btn-soft">
+                              View PDF
+                            </a>
+                            <a href={`${fileOrigin}${report.fileUrl}`} download={report.fileName || 'term-report.pdf'} className="ic-btn-soft">
+                              Download
+                            </a>
+                          </>
+                        ) : null}
                       </div>
                     </RowCard>
                   ))}

@@ -146,7 +146,7 @@ export default function ProfilePage() {
               </FormStep>
               <FormActions>
                 <span />
-                <FormSubmitButton disabled={loading} busyLabel="Saving…">
+                <FormSubmitButton disabled={loading} busy={loading} busyLabel="Saving…">
                   Save number
                 </FormSubmitButton>
               </FormActions>

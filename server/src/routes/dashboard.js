@@ -301,6 +301,7 @@ dashboardRouter.get('/parent', requireAuth, async (req, res, next) => {
 
     const reportsResult = await pool.query(
       `SELECT r.id, r.title, r.period_label, r.period_start, r.period_end, r.published_at, r.summary,
+              r.file_name, r.file_path,
               u.id AS learner_id, u.first_name, u.last_name
        FROM reports r
        JOIN parent_learners pl ON pl.learner_id = r.learner_id
@@ -429,6 +430,9 @@ dashboardRouter.get('/parent', requireAuth, async (req, res, next) => {
       publishedAt: row.published_at,
       learnerId: row.learner_id,
       childName: `${row.first_name} ${row.last_name}`.trim(),
+      fileName: row.file_name ?? null,
+      fileUrl: row.file_path ? `/uploads/${row.file_path}` : null,
+      hasFile: Boolean(row.file_path),
       summary: row.summary ?? {},
     }));
 

@@ -94,10 +94,10 @@ export function FormCancelButton({ children = 'Cancel', onClick, disabled }) {
   );
 }
 
-export function FormSubmitButton({ children, disabled, busyLabel }) {
+export function FormSubmitButton({ children, disabled, busy = false, busyLabel }) {
   return (
     <button type="submit" className="fk-btn fk-btn--primary" disabled={disabled}>
-      {disabled && busyLabel ? busyLabel : children}
+      {busy && busyLabel ? busyLabel : children}
     </button>
   );
 }

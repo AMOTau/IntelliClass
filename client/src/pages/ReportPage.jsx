@@ -20,6 +20,8 @@ import { formatDueDate } from '../utils/dates';
 import { parseApiError } from '../utils/errors';
 import { FEATURES } from '../utils/featureFlags';
 
+const fileOrigin = (import.meta.env.VITE_API_URL ?? 'http://localhost:4000/api').replace(/\/api\/?$/, '');
+
 export default function ReportPage() {
   const { reportId } = useParams();
   const { signOut, user } = useAuthSession();
@@ -78,6 +80,19 @@ export default function ReportPage() {
           <p className="text-xs text-slate-500 -mt-3 mb-6">
             Published {formatDueDate(report.publishedAt)}. This snapshot will not change if later marks come in.
           </p>
+
+          {report.fileUrl ? (
+            <Panel title="Term report PDF" icon={IconReports} tone="orange">
+              <div className="flex flex-wrap gap-3 items-center">
+                <a href={`${fileOrigin}${report.fileUrl}`} target="_blank" rel="noreferrer" className="ic-btn-primary text-sm">
+                  View PDF
+                </a>
+                <a href={`${fileOrigin}${report.fileUrl}`} download={report.fileName || 'term-report.pdf'} className="ic-btn-soft">
+                  Download PDF
+                </a>
+              </div>
+            </Panel>
+          ) : null}
 
           <StatGrid
             items={[

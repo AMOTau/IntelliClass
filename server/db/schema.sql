@@ -305,11 +305,16 @@ CREATE TABLE IF NOT EXISTS reports (
   period_end date NOT NULL,
   summary jsonb NOT NULL DEFAULT '{}'::jsonb,
   comment text,
+  file_name text,
+  file_path text,
   published_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (learner_id, period_start, period_end)
 );
+
+ALTER TABLE reports ADD COLUMN IF NOT EXISTS file_name text;
+ALTER TABLE reports ADD COLUMN IF NOT EXISTS file_path text;
 
 CREATE INDEX IF NOT EXISTS idx_reports_learner_id ON reports (learner_id, published_at);
 

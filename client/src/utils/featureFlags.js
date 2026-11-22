@@ -4,7 +4,7 @@
  */
 export const FEATURES = {
   homework: false,
-  termReports: false,
+  termReports: true,
 };
 
 export function isFeatureEnabled(feature) {
